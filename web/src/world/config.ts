@@ -116,7 +116,7 @@ function station(
 ): StationConfig {
   // Every station faces the middle of the chunk.
   const yaw = yawToward(position, [0, 0, 0]);
-  const approach = approachSlots(position, yaw, approachDistance, 0.85);
+  const approach = approachSlots(position, yaw, approachDistance, 1.0);
   return {
     id,
     label,

@@ -105,3 +105,10 @@ export function isWalkable(x: number, z: number): boolean {
   const limit = (CHUNK.walkRadius * outlineRadius(theta)) / CHUNK.radius;
   return Math.hypot(x, z) <= limit;
 }
+
+/** Height astronauts stand at: the terrain, plus the deck when on the landing pad. */
+export function groundHeight(x: number, z: number): number {
+  const d = Math.hypot(x - LANDING_PAD.position[0], z - LANDING_PAD.position[2]);
+  const onPad = 1 - smoothstep(LANDING_PAD.radius - 0.15, LANDING_PAD.radius + 0.1, d);
+  return terrainHeight(x, z) + onPad * LANDING_PAD.deckHeight;
+}
