@@ -1,6 +1,7 @@
 import { Canvas } from '@react-three/fiber';
 import { NeutralToneMapping } from 'three';
 import { CAMERA, PALETTE } from '../world/config';
+import { Agents } from './agents/Agents';
 import { CameraRig } from './CameraRig';
 import { Lighting } from './environment/Lighting';
 import { Sky } from './environment/Sky';
@@ -27,6 +28,7 @@ export function Scene() {
       <TerrainChunk />
       <Decorations />
       <Stations />
+      <Agents />
     </Canvas>
   );
 }

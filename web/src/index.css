@@ -27,3 +27,33 @@ body,
   position: fixed;
   inset: 0;
 }
+
+/* Floating name labels above astronauts (drei <Html>). */
+.agent-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 999px;
+  background: rgba(255, 250, 247, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 2px 8px rgba(92, 72, 150, 0.2);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.agent-label--crew {
+  font-size: 10.5px;
+  padding: 1px 7px 1px 5px;
+  opacity: 0.92;
+}
+
+.agent-label__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.7);
+}
