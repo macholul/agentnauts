@@ -1,0 +1,29 @@
+:root {
+  color-scheme: light;
+  font-family: 'Nunito', ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ink: #3a3566;
+  --ink-soft: #6b6497;
+  --panel: rgba(255, 250, 247, 0.78);
+  --panel-border: rgba(255, 255, 255, 0.9);
+  --shadow: 0 8px 28px rgba(92, 72, 150, 0.18);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: linear-gradient(#94b8ee, #c7b5ec 55%, #ffcbb4);
+  color: var(--ink);
+}
+
+.app {
+  position: fixed;
+  inset: 0;
+}
