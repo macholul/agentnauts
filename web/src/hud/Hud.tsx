@@ -3,6 +3,7 @@ import { STATION_IDS } from '@groundcrew/shared';
 import { useAgentStore, type Agent } from '../store/agentStore';
 import { useSourceStore, type SourceInfo } from '../sources/sourceStore';
 import { STATIONS } from '../world/config';
+import { Multiplayer } from './Multiplayer';
 import './hud.css';
 
 const STATE_LABEL: Record<Agent['state'], string> = {
@@ -96,7 +97,7 @@ export function Hud() {
   const [legendOpen, setLegendOpen] = useState(false);
 
   const ordered = useMemo(() => orderAgents(agents), [agents]);
-  const connections = Object.values(sources).filter((s) => s.id !== 'simulator');
+  const connections = Object.values(sources).filter((s) => s.id !== 'simulator' && s.id !== 'room');
   const waiting = ordered.filter((a) => a.state === 'waiting').length;
 
   return (
@@ -144,6 +145,8 @@ export function Hud() {
               </ul>
             )}
           </section>
+
+          <Multiplayer />
 
           <section className="hud-section hud-legend">
             <button className="hud-section__title hud-link" onClick={() => setLegendOpen((o) => !o)}>

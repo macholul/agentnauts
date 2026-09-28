@@ -12,6 +12,14 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { BRIDGE_WS_PATH, DEFAULT_BRIDGE_PORT, type AgentEvent, type ServerMessage } from '@groundcrew/shared';
 import { normalizeHookPayload } from './normalize';
 import { isAllowedOrigin } from './origin';
+import { createRoomForwarder, roomConfigFromEnv } from './room';
+
+// Optional settings file next to package.json (see .env.example).
+try {
+  process.loadEnvFile('.env');
+} catch {
+  // No .env: plain environment variables only.
+}
 
 const VERSION = '0.1.0';
 const PORT = Number(process.env.PORT ?? DEFAULT_BRIDGE_PORT);
@@ -19,6 +27,10 @@ const PORT = Number(process.env.PORT ?? DEFAULT_BRIDGE_PORT);
 const HOST = process.env.HOST ?? '127.0.0.1';
 const MAX_BODY_BYTES = 20 * 1024 * 1024;
 const QUIET = process.env.GROUNDCREW_QUIET === '1';
+
+const roomSettings = roomConfigFromEnv(process.env);
+if (roomSettings.problem) console.warn(`[groundcrew] multiplayer disabled: ${roomSettings.problem}`);
+const roomConfig = roomSettings.config;
 
 const extraOrigins = (process.env.ALLOWED_ORIGINS ?? '')
   .split(',')
@@ -94,7 +106,12 @@ wss.on('connection', (socket, req) => {
   socket.on('error', (error) => log('[ws] client error:', error.message));
   socket.on('close', () => log(`[ws] browser disconnected (${wss.clients.size} connected)`));
   // Browsers never need to send us anything; ignore whatever they do send.
-  const hello: ServerMessage = { type: 'hello', server: 'groundcrew', version: VERSION };
+  const hello: ServerMessage = {
+    type: 'hello',
+    server: 'groundcrew',
+    version: VERSION,
+    ...(roomConfig ? { room: roomConfig.room, name: roomConfig.name } : {}),
+  };
   socket.send(JSON.stringify(hello));
   log(`[ws] browser connected from ${req.headers.origin ?? req.socket.remoteAddress} (${wss.clients.size} connected)`);
 });
@@ -162,9 +179,12 @@ async function handleEvent(req: http.IncomingMessage, res: http.ServerResponse):
   for (const event of result.events) {
     log(`[hooks] ${describe(event)}`);
     broadcast({ type: 'event', event });
+    roomForwarder?.forward(event);
   }
   send(res, 204);
 }
+
+const roomForwarder = roomConfig ? createRoomForwarder(roomConfig, log) : null;
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
@@ -232,10 +252,17 @@ server.listen(PORT, HOST, () => {
   console.log(`[groundcrew] event bridge listening on http://${HOST === '::' ? 'localhost' : HOST}:${PORT}`);
   console.log(`[groundcrew]   hooks  → POST http://localhost:${PORT}/event`);
   console.log(`[groundcrew]   browser ← ws://localhost:${PORT}${BRIDGE_WS_PATH}`);
+  if (roomConfig) {
+    console.log(
+      `[groundcrew]   room   → sharing as "${roomConfig.name}" in room "${roomConfig.room}"` +
+        (roomConfig.shareDetails ? ' (with file names and commands)' : ' (tool names only)'),
+    );
+  }
 });
 
 function shutdown(): void {
   clearInterval(heartbeat);
+  void roomForwarder?.close();
   for (const client of wss.clients) client.close(1001, 'server shutting down');
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 1000).unref();

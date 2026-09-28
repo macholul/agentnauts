@@ -8,11 +8,12 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "typecheck": "tsc -p .",
-    "build": "npm run typecheck && esbuild src/index.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/index.js --external:ws",
+    "build": "npm run typecheck && esbuild src/index.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/index.js --external:ws --external:@supabase/supabase-js",
     "test": "tsx --test src/*.test.ts"
   },
   "dependencies": {
     "@groundcrew/shared": "0.1.0",
+    "@supabase/supabase-js": "^2.117.2",
     "ws": "^8.22.0"
   },
   "devDependencies": {

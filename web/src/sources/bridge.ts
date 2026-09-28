@@ -5,6 +5,7 @@
  * browser.
  */
 import { BRIDGE_WS_PATH, DEFAULT_BRIDGE_PORT, parseServerMessage } from '@groundcrew/shared';
+import { useSourceStore } from './sourceStore';
 import { StatusEmitter, type AgentEventSource, type EventSink, type SourceStatus } from './types';
 
 /** VITE_BRIDGE_URL overrides the default ws://<page host>:4747/ws. */
@@ -84,6 +85,11 @@ export class BridgeSource implements AgentEventSource {
       if (!parsed) {
         console.warn('[bridge] ignoring unexpected message', message.data.slice(0, 200));
         return;
+      }
+      if (parsed.type === 'hello') {
+        useSourceStore.getState().setBridgeIdentity(
+          parsed.room || parsed.name ? { ...(parsed.room ? { room: parsed.room } : {}), ...(parsed.name ? { name: parsed.name } : {}) } : null,
+        );
       }
       if (parsed.type === 'event') this.sink?.(parsed.event);
     };

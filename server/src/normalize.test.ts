@@ -119,3 +119,32 @@ describe('isAllowedOrigin', () => {
     assert.ok(isAllowedOrigin('http://192.168.1.5:5173', ['http://192.168.1.5:5173']));
   });
 });
+
+describe('toRoomMessage', () => {
+  it('strips details unless sharing is enabled', async () => {
+    const { toRoomMessage } = await import('./room');
+    const { events } = normalizeHookPayload({
+      ...base,
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: 'cat ~/.secrets' },
+    });
+    const event = events[0]!;
+    const privateMsg = toRoomMessage(event, { name: 'bob', shareDetails: false });
+    assert.equal(privateMsg.owner, 'bob');
+    assert.equal(privateMsg.event.toolName, 'Bash');
+    assert.equal(privateMsg.event.detail, undefined);
+    const shared = toRoomMessage(event, { name: 'bob', shareDetails: true });
+    assert.equal(shared.event.detail, 'cat ~/.secrets');
+  });
+
+  it('reads room config from env and rejects half-configured setups', async () => {
+    const { roomConfigFromEnv } = await import('./room');
+    assert.equal(roomConfigFromEnv({}).config, null);
+    assert.ok(roomConfigFromEnv({ GROUNDCREW_ROOM: 'abcdef123' }).problem);
+    assert.ok(roomConfigFromEnv({ SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: 'k', GROUNDCREW_ROOM: 'ab', GROUNDCREW_NAME: 'bob' }).problem);
+    const ok = roomConfigFromEnv({ SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: 'k', GROUNDCREW_ROOM: 'team-rocket-42', GROUNDCREW_NAME: ' bob ' });
+    assert.equal(ok.config?.name, 'bob');
+    assert.equal(ok.config?.shareDetails, false);
+  });
+});
