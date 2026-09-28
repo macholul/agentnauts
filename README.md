@@ -198,7 +198,7 @@ web/  ┌───────────────────────�
 
 **Design rules that keep future work open**
 
-- *Multiplayer*: rooms are just another `AgentEventSource` (`sources/room.ts`);
+- *Multiplayer*: private rooms are just another `AgentEventSource` (`sources/room.ts`);
   the scene doesn't know events are remote. The store holds only plain data,
   so it stays easy to sync.
 - *Art pass*: the astronaut is driven entirely by an `AstronautPose` ref
@@ -206,61 +206,72 @@ web/  ┌───────────────────────�
   just maps those modes to animation clips. Stations are separate components
   that receive an `activity` ref (0..1).
 
-## Multiplayer (rooms)
+## Multiplayer (private rooms)
 
 Share a room with teammates and everyone's astronauts work on the same base.
-To join, you enter a room code (or open a shared link) and that's it.
+Rooms are private: you sign in, and the room's owner decides who gets in.
 
 ```
 your Claude Code ──hooks──▶ your bridge ──▶ your browser (local, as before)
                                  │
-                                 └──broadcast──▶ room ──▶ everyone's browser
+                                 └──signed events──▶ private room ──▶ members' browsers
 ```
 
-**Using it:** in the HUD's **Multiplayer** panel, type your name and a room
-code (**New** makes one) and press **Join room**, or open a `?room=` link from
-**Copy link**. Your browser tells your local bridge to share your agents in
-that room, and the bridge remembers it across restarts
-(`~/.groundcrew/room.json`). Other people's astronauts are labelled
-`name · project`. Without a running bridge you can still join and watch.
+**Using it** (Multiplayer panel in the HUD):
 
-**How it's hosted:** rooms are relayed by a single
-[Supabase](https://supabase.com) project shared by everyone using this build
-(Realtime broadcast channels; nothing is stored in a database). **One-time
-setup for the maintainer only:** create a free Supabase project and paste its
-project URL and anon (publishable) key into
-[`shared/src/cloud.ts`](shared/src/cloud.ts) (Project Settings → API). The anon
-key is meant to be public, so committing it is fine. If joining fails, check
-that the project's Realtime settings allow public (non-private) channels.
-Forks can point at their own project with `SUPABASE_URL` /
-`SUPABASE_ANON_KEY` (bridge) and `VITE_SUPABASE_URL` /
-`VITE_SUPABASE_ANON_KEY` (web).
+1. **Sign in** with your email: you get a one-time code (no password).
+2. **Create a room**, or **ask to join** one with its code / invite link.
+3. The owner sees your request (name + email) and clicks **Let in** or
+   **Deny**. Owners can remove people and delete the room later.
+4. Once you're in, your browser tells your local bridge to share your agents
+   there. Other people's astronauts show up labelled `name · project`.
+
+**How it's hosted:** one [Supabase](https://supabase.com) project serves
+everyone using this build: sign-in, the room/member tables, and Realtime
+private channels (events are relayed, never stored). **One-time setup for the
+maintainer only:**
+
+1. Create a free Supabase project and paste its project URL and anon
+   (publishable) key into [`shared/src/cloud.ts`](shared/src/cloud.ts)
+   (Project Settings → API). The anon key is meant to be public.
+2. Run [`supabase/migrations/20260928000000_private_rooms.sql`](supabase/migrations/20260928000000_private_rooms.sql)
+   in the SQL editor. It creates the tables, the access rules and the
+   join/approve functions.
+3. Authentication → Sign In / Providers: keep **Email** enabled. In
+   Authentication → Emails → *Magic Link*, include `{{ .Token }}` in the
+   template so emails contain the one-time code. Set the Site URL to where
+   people open the app (e.g. `http://localhost:5173`) so the link works too.
+   The built-in email sender is rate-limited; add your own SMTP for bigger
+   teams.
+4. Realtime → Settings: turn **off** "Allow public access", so only signed-in
+   members can use channels at all.
+
+The access rules are tested against a real Postgres in `server/src/db.test.ts`
+(run with `npm test`).
 
 **Privacy and identity.**
 
-- *Nothing is shared until you join a room*, and a big "Sharing live" badge
-  stays at the top of the screen while you are. **Stop sharing** keeps you
-  watching without sending anything.
+- *Only people the owner lets in* can see or post anything in a room. That's
+  enforced by the database (row level security on Realtime channels), not by
+  the app. Knowing a room code only lets you *ask*. Email addresses are shown
+  to the room owner only.
+- *Nothing is shared until you choose to*, and a "Sharing live" badge stays
+  at the top of the screen while you are. **Stop sharing** keeps you watching.
 - *Sharing never resumes on its own.* The bridge remembers your room, but after
   a restart it waits until you click **Resume sharing** in the app.
+- *Your bridge never gets your login.* The app hands it a short-lived access
+  token (kept in memory, refreshed while the app is open). If the app stays
+  closed for about an hour, sharing pauses until you open it again.
 - *Minimal by default.* Only tool names and states are sent (e.g. "Edit",
   "waiting"). Project folder names become "project 1", "project 2"; file
   names, commands and search queries are dropped. Tick **Also share project
   names, files & commands** to include them. Code, prompts and Claude's replies
   are never sent.
-- *Rooms can't be guessed.* Only generated codes (`crew-xxxx-xxxx-xxxx`, about
-  59 bits of randomness) are accepted. The code is the room's password: anyone
-  who has it can watch, so share it like one.
 - *Nobody can pose as you.* Each bridge creates an Ed25519 key pair once
   (`~/.groundcrew/identity.json`, readable only by you) and signs every event;
   browsers drop anything with a bad signature, and signed messages can't be
   replayed into another room. Your short ID (e.g. `✓ a3f9-c21e`) is shown in
-  the panel: tell teammates yours once, and they can tell the real you from
-  anyone else using your name. Names are just labels; if two people pick the
-  same one, the newcomer's astronauts show their ID.
-- *What's not protected:* anyone with the room code can still watch (and see
-  who's watching), and the shared Supabase project's free quota can be used by
-  anyone with the app. Sign-in based private rooms would fix both.
+  the panel so teammates can recognise the real you.
 
 ## Configuration
 
@@ -270,8 +281,6 @@ Forks can point at their own project with `SUPABASE_URL` /
 | `HOST`             | server | `127.0.0.1`           | Bind address. Use `0.0.0.0` to open it to your LAN        |
 | `ALLOWED_ORIGINS`  | server | localhost pages only  | Extra browser origins allowed to connect, comma separated |
 | `GROUNDCREW_QUIET` | server | unset                 | `1` silences per-event logging                            |
-| `GROUNDCREW_ROOM`, `GROUNDCREW_NAME` | server | unset | Pin the bridge to a room (normally chosen in the web app) |
-| `GROUNDCREW_SHARE_DETAILS` | server | unset | `1` also shares file names / commands with the room |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | server | `shared/src/cloud.ts` | Use a different Supabase project |
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | web | `shared/src/cloud.ts` | Use a different Supabase project |
 | `VITE_BRIDGE_URL`  | web    | `ws://<page host>:4747/ws` | Where the browser connects                           |

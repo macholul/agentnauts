@@ -18,21 +18,58 @@ export type ServerMessage =
       /** Whether this build has a multiplayer (Supabase) project configured. */
       cloud?: boolean;
       /** Room the bridge is sharing to right now (only after you said so). */
-      room?: string;
-      name?: string;
-      shareDetails?: boolean;
+      room?: BridgeRoom;
       /** Room remembered from last time, waiting for you to resume it. */
-      resumable?: { room: string; name: string; shareDetails: boolean };
+      resumable?: BridgeRoom;
+      /** Sharing, but the access token expired: open the app to refresh it. */
+      needsToken?: boolean;
       /** This bridge's public key (its multiplayer identity). */
       identity?: string;
     }
   /** A normalized agent event. */
   | { type: 'event'; event: AgentEvent };
 
-function isResumable(value: unknown): value is { room: string; name: string; shareDetails: boolean } {
-  if (typeof value !== 'object' || value === null) return false;
+/**
+ * A room as the bridge knows it. The id is what access control and the
+ * Realtime channel use; the code is what people type to ask to join.
+ */
+export interface BridgeRoom {
+  roomId: string;
+  code: string;
+  /** Room's display name. */
+  roomName: string;
+  /** Your display name in that room. */
+  name: string;
+  shareDetails: boolean;
+}
+
+/** Body of PUT /room on the bridge: a room plus a short-lived access token. */
+export interface BridgeRoomRequest extends BridgeRoom {
+  /** Supabase access token (JWT) of the signed-in user. Never the refresh token. */
+  accessToken: string;
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+export function isUuid(value: unknown): value is string {
+  return typeof value === 'string' && UUID.test(value);
+}
+
+export function parseBridgeRoom(value: unknown): BridgeRoom | null {
+  if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
-  return typeof v.room === 'string' && isValidRoomCode(v.room) && typeof v.name === 'string' && typeof v.shareDetails === 'boolean';
+  if (!isUuid(v.roomId) || typeof v.code !== 'string' || !isValidRoomCode(v.code)) return null;
+  const name = typeof v.name === 'string' ? cleanName(v.name) : '';
+  const roomName = typeof v.roomName === 'string' ? v.roomName.trim().slice(0, 40) : '';
+  if (!name) return null;
+  return { roomId: v.roomId, code: v.code, roomName: roomName || v.code, name, shareDetails: v.shareDetails === true };
+}
+
+export function parseBridgeRoomRequest(value: unknown): BridgeRoomRequest | null {
+  const room = parseBridgeRoom(value);
+  const token = (value as { accessToken?: unknown } | null)?.accessToken;
+  if (!room || typeof token !== 'string' || token.length < 20 || token.length > 8192) return null;
+  return { ...room, accessToken: token };
 }
 
 /** Parse and validate a raw WebSocket message. Returns null if it isn't one of ours. */
@@ -51,11 +88,10 @@ export function parseServerMessage(raw: string): ServerMessage | null {
       server: 'groundcrew',
       version: msg.version,
       ...(typeof msg.cloud === 'boolean' ? { cloud: msg.cloud } : {}),
-      ...(typeof msg.room === 'string' && isValidRoomCode(msg.room) ? { room: msg.room } : {}),
-      ...(typeof msg.shareDetails === 'boolean' ? { shareDetails: msg.shareDetails } : {}),
-      ...(isResumable(msg.resumable) ? { resumable: msg.resumable } : {}),
+      ...(parseBridgeRoom(msg.room) ? { room: parseBridgeRoom(msg.room)! } : {}),
+      ...(parseBridgeRoom(msg.resumable) ? { resumable: parseBridgeRoom(msg.resumable)! } : {}),
+      ...(msg.needsToken === true ? { needsToken: true } : {}),
       ...(typeof msg.identity === 'string' && BASE64URL.test(msg.identity) ? { identity: msg.identity } : {}),
-      ...(typeof msg.name === 'string' && msg.name ? { name: cleanName(msg.name) } : {}),
     };
   }
   if (msg.type === 'event' && isAgentEvent(msg.event)) {
@@ -71,9 +107,9 @@ export function parseServerMessage(raw: string): ServerMessage | null {
 /** Broadcast event name used on room channels. */
 export const ROOM_EVENT = 'agent_event';
 
-/** Realtime channel name for a room. */
-export function roomTopic(room: string): string {
-  return `groundcrew:${room.toLowerCase()}`;
+/** Realtime channel name for a room (by id; access rules match on it). */
+export function roomTopic(roomId: string): string {
+  return `groundcrew:${roomId}`;
 }
 
 /** Characters used in room codes: no 0/o, 1/l/i to keep them easy to read aloud. */
@@ -81,9 +117,9 @@ export const ROOM_CODE_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
 const ROOM_CODE_PATTERN = /^crew(-[abcdefghjkmnpqrstuvwxyz23456789]{4}){3}$/;
 
 /**
- * Room codes are the shared secret for a room, so only generated ones are
- * accepted: `crew-xxxx-xxxx-xxxx`, 12 random characters (~59 bits), far too
- * many to guess.
+ * Room codes are what people type to ask to join a room (the owner still
+ * has to let them in). Only generated ones are accepted:
+ * `crew-xxxx-xxxx-xxxx`, 12 random characters (~59 bits).
  */
 export function isValidRoomCode(room: string): boolean {
   return ROOM_CODE_PATTERN.test(room);
@@ -116,7 +152,7 @@ export function cleanName(name: string): string {
 /** What a bridge signs. Serialized to a string before signing so every
  * receiver verifies exactly the bytes that were signed. */
 export interface SignedRoomContent {
-  /** Room the message is for (a signed message can't be replayed elsewhere). */
+  /** Room id the message is for (a signed message can't be replayed elsewhere). */
   room: string;
   /** Display name of the sender. */
   owner: string;

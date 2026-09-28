@@ -503,3 +503,28 @@
     bottom: 12px;
   }
 }
+
+.hud-requests {
+  margin: 6px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hud-request {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: rgba(124, 108, 240, 0.08);
+  font-size: 12px;
+}
+
+.hud-remove {
+  margin-left: 6px;
+}
+
+.hud-section .hud-form {
+  margin-top: 6px;
+}

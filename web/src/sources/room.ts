@@ -5,37 +5,21 @@
  * and feeds genuine events into the store like any other source, so the
  * scene doesn't know or care that they're remote.
  */
-import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import {
   ROOM_EVENT,
   canVerifySignatures,
   keyFingerprint,
   makeId,
   parseRoomEnvelope,
-  resolveCloud,
   roomTopic,
   verifyRoomEnvelope,
   type AgentEvent,
 } from '@groundcrew/shared';
+import type { JoinedRoom } from './roomsApi';
 import { useSourceStore, type Roommate } from './sourceStore';
+import { getSupabase } from './supabase';
 import { StatusEmitter, type AgentEventSource, type EventSink, type SourceStatus } from './types';
-
-export interface SupabaseSettings {
-  url: string;
-  key: string;
-}
-
-/** The shared Supabase project (shared/src/cloud.ts, overridable via VITE_ env), or null. */
-export function supabaseSettings(): SupabaseSettings | null {
-  return resolveCloud(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY);
-}
-
-let client: SupabaseClient | null = null;
-
-function getClient(settings: SupabaseSettings): SupabaseClient {
-  client ??= createClient(settings.url, settings.key, { auth: { persistSession: false } });
-  return client;
-}
 
 /**
  * Keep each person's sessions apart by their verified key (never just their
@@ -70,6 +54,7 @@ export class RoomSource implements AgentEventSource {
   readonly label: string;
   private status = new StatusEmitter();
   private channel: RealtimeChannel | null = null;
+  private stopped = false;
   private readonly presenceKey = makeId('viewer');
   private readonly recent = new RecentIds();
   /** Which key first used each display name in this room. */
@@ -77,11 +62,10 @@ export class RoomSource implements AgentEventSource {
   private rejected = 0;
 
   constructor(
-    private readonly settings: SupabaseSettings,
-    private readonly room: string,
+    private readonly room: JoinedRoom,
     private readonly name: string,
   ) {
-    this.label = `Room ${room}`;
+    this.label = `Room ${room.name}`;
   }
 
   onStatus(listener: (status: SourceStatus) => void): () => void {
@@ -97,10 +81,12 @@ export class RoomSource implements AgentEventSource {
       });
       return;
     }
-    this.status.set({ state: 'connecting', detail: `Joining room ${this.room}` });
-    const supabase = getClient(this.settings);
-    const channel = supabase.channel(roomTopic(this.room), {
-      config: { broadcast: { self: false }, presence: { key: this.presenceKey, enabled: true } },
+    const supabase = getSupabase();
+    if (!supabase) return;
+    this.status.set({ state: 'connecting', detail: `Joining ${this.room.name}` });
+    // Private channel: the database only lets approved members in.
+    const channel = supabase.channel(roomTopic(this.room.id), {
+      config: { private: true, broadcast: { self: false }, presence: { key: this.presenceKey, enabled: true } },
     });
     this.channel = channel;
 
@@ -119,31 +105,36 @@ export class RoomSource implements AgentEventSource {
       useSourceStore.getState().setRoommates(roommates);
     });
 
-    channel.subscribe((status, error) => {
-      if (this.channel !== channel) return;
-      if (status === 'SUBSCRIBED') {
-        this.status.set({ state: 'connected', detail: `In room ${this.room} as ${this.name}` });
-        void channel.track({ name: this.name });
-      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        // realtime-js keeps retrying on its own; just report it.
-        this.status.set({ state: 'error', detail: error?.message ?? `Could not join room ${this.room}` });
-      } else if (status === 'CLOSED') {
-        this.status.set({ state: 'disconnected', detail: `Left room ${this.room}` });
-      }
+    // Make sure the channel authorizes with the signed-in user's token.
+    void supabase.realtime.setAuth().then(() => {
+      if (this.stopped) return;
+      channel.subscribe((status, error) => {
+        if (this.channel !== channel) return;
+        if (status === 'SUBSCRIBED') {
+          this.status.set({ state: 'connected', detail: `In ${this.room.name} as ${this.name}` });
+          void channel.track({ name: this.name });
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          // realtime-js keeps retrying on its own; just report it.
+          this.status.set({ state: 'error', detail: error?.message ?? `Could not join ${this.room.name}` });
+        } else if (status === 'CLOSED') {
+          this.status.set({ state: 'disconnected', detail: `Left ${this.room.name}` });
+        }
+      });
     });
   }
 
   stop(): void {
+    this.stopped = true;
     const channel = this.channel;
     this.channel = null;
-    if (channel && client) void client.removeChannel(channel);
+    if (channel) void getSupabase()?.removeChannel(channel);
     useSourceStore.getState().setRoommates([]);
     this.status.set({ state: 'stopped' });
   }
 
   private async receive(payload: unknown, sink: EventSink): Promise<void> {
     const envelope = parseRoomEnvelope(payload);
-    const content = envelope ? await verifyRoomEnvelope(envelope, this.room) : null;
+    const content = envelope ? await verifyRoomEnvelope(envelope, this.room.id) : null;
     if (!content) {
       // Unsigned, forged, tampered, or meant for another room.
       this.rejected++;
@@ -163,7 +154,7 @@ export class RoomSource implements AgentEventSource {
 
     // Names are just labels: whoever used a name first keeps it (you, for your
     // own name); anyone else using it is shown with their ID.
-    const ownName = store.bridgeIdentity?.name;
+    const ownName = store.bridgeIdentity?.room?.name;
     if (ownKey && ownName && !this.nameOwners.has(ownName)) this.nameOwners.set(ownName, ownKey);
     if (!this.nameOwners.has(content.owner)) this.nameOwners.set(content.owner, content.key);
     const nameTaken = this.nameOwners.get(content.owner) !== content.key;

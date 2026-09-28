@@ -9,11 +9,17 @@
  */
 import http from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
-import { BRIDGE_WS_PATH, DEFAULT_BRIDGE_PORT, type AgentEvent, type ServerMessage } from '@groundcrew/shared';
+import {
+  BRIDGE_WS_PATH,
+  DEFAULT_BRIDGE_PORT,
+  parseBridgeRoomRequest,
+  type AgentEvent,
+  type ServerMessage,
+} from '@groundcrew/shared';
 import { normalizeHookPayload } from './normalize';
 import { isAllowedOrigin } from './origin';
 import { loadOrCreateIdentity } from './identity';
-import { RoomManager, parseRoomSettings } from './room';
+import { RoomManager } from './room';
 
 // Optional settings file next to package.json (see .env.example).
 try {
@@ -108,8 +114,9 @@ function helloMessage(): ServerMessage {
     version: VERSION,
     cloud: rooms.cloud !== null,
     ...(rooms.cloud ? { identity: rooms.identity.publicKey } : {}),
-    ...(room ? { room: room.room, name: room.name, shareDetails: room.shareDetails } : {}),
+    ...(room ? { room } : {}),
     ...(rooms.resumable ? { resumable: rooms.resumable } : {}),
+    ...(rooms.needsToken ? { needsToken: true } : {}),
   };
 }
 
@@ -195,28 +202,50 @@ async function handleEvent(req: http.IncomingMessage, res: http.ServerResponse):
 }
 
 /** PUT /room {room, name, shareDetails} starts sharing; DELETE /room stops. */
-async function handleRoom(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+/**
+ * PUT /room {roomId, code, roomName, name, shareDetails, accessToken} starts
+ * sharing; DELETE /room stops; POST /room/token {accessToken} refreshes the
+ * token. Only the web app (localhost origin) or local tools can call these.
+ */
+async function handleRoom(req: http.IncomingMessage, res: http.ServerResponse, path: string): Promise<void> {
   if (!rooms.cloud) {
     send(res, 409, { error: 'multiplayer is not configured in this build' });
     return;
   }
-  let settings = null;
-  if (req.method === 'PUT') {
-    try {
-      settings = parseRoomSettings(JSON.parse(await readBody(req)));
-    } catch {
-      settings = null;
-    }
-    if (!settings) {
-      send(res, 400, { error: 'expected {room, name, shareDetails}' });
-      return;
-    }
-  }
-  if (!rooms.set(settings)) {
-    send(res, 409, { error: 'room is fixed by GROUNDCREW_ROOM on the bridge' });
+  if (req.method === 'DELETE' && path === '/room') {
+    rooms.set(null);
+    send(res, 200, {});
     return;
   }
-  send(res, 200, rooms.current ?? {});
+  let body: unknown;
+  try {
+    body = JSON.parse(await readBody(req));
+  } catch {
+    send(res, 400, { error: 'expected JSON' });
+    return;
+  }
+  if (req.method === 'PUT' && path === '/room') {
+    const request = parseBridgeRoomRequest(body);
+    if (!request) {
+      send(res, 400, { error: 'expected {roomId, code, roomName, name, shareDetails, accessToken}' });
+      return;
+    }
+    const { accessToken, ...room } = request;
+    rooms.set(room, accessToken);
+    send(res, 200, rooms.current ?? {});
+    return;
+  }
+  if (req.method === 'POST' && path === '/room/token') {
+    const token = (body as { accessToken?: unknown } | null)?.accessToken;
+    if (typeof token !== 'string' || token.length < 20) {
+      send(res, 400, { error: 'expected {accessToken}' });
+      return;
+    }
+    rooms.setToken(token);
+    send(res, 204);
+    return;
+  }
+  send(res, 405);
 }
 
 const server = http.createServer((req, res) => {
@@ -241,10 +270,9 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (url.pathname === '/room') {
-    if (req.method === 'GET') send(res, 200, rooms.current ?? {});
-    else if (req.method === 'PUT' || req.method === 'DELETE') void handleRoom(req, res);
-    else send(res, 405);
+  if (url.pathname === '/room' || url.pathname === '/room/token') {
+    if (req.method === 'GET' && url.pathname === '/room') send(res, 200, rooms.current ?? {});
+    else void handleRoom(req, res, url.pathname);
     return;
   }
 
@@ -296,11 +324,11 @@ server.listen(PORT, HOST, () => {
   const room = rooms.current;
   if (room) {
     console.log(
-      `[groundcrew]   room   → SHARING as "${room.name}" in room "${room.room}"` +
+      `[groundcrew]   room   → SHARING as "${room.name}" in room "${room.roomName}"` +
         (room.shareDetails ? ' (with project names, files and commands)' : ' (tool names only)'),
     );
   } else if (rooms.resumable) {
-    console.log(`[groundcrew]   room   → not sharing; open the web app to resume room "${rooms.resumable.room}"`);
+    console.log(`[groundcrew]   room   → not sharing; open the web app to resume room "${rooms.resumable.roomName}"`);
   } else if (!rooms.cloud) {
     console.log('[groundcrew]   room   → multiplayer not configured (see shared/src/cloud.ts)');
   }

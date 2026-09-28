@@ -4,23 +4,42 @@
  * Reconnects with backoff, so the bridge can be started before or after the
  * browser.
  */
-import { BRIDGE_WS_PATH, DEFAULT_BRIDGE_PORT, parseServerMessage } from '@groundcrew/shared';
+import { BRIDGE_WS_PATH, DEFAULT_BRIDGE_PORT, parseServerMessage, type BridgeRoomRequest } from '@groundcrew/shared';
 import { useSourceStore } from './sourceStore';
 import { StatusEmitter, type AgentEventSource, type EventSink, type SourceStatus } from './types';
 
-/**
- * Tell the local bridge which room to share this machine's agents in (or
- * null to stop). The bridge answers with a fresh hello over the WebSocket.
- */
-export async function setBridgeRoom(settings: { room: string; name: string; shareDetails: boolean } | null): Promise<boolean> {
+function bridgeHttpUrl(path: string): URL {
   const url = new URL(defaultBridgeUrl());
   url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:';
-  url.pathname = '/room';
+  url.pathname = path;
+  return url;
+}
+
+/**
+ * Tell the local bridge which room to share this machine's agents in (or
+ * null to stop). The request carries a short-lived access token, never the
+ * refresh token. The bridge answers with a fresh hello over the WebSocket.
+ */
+export async function setBridgeRoom(request: BridgeRoomRequest | null): Promise<boolean> {
   try {
-    const res = await fetch(url, {
-      method: settings ? 'PUT' : 'DELETE',
+    const res = await fetch(bridgeHttpUrl('/room'), {
+      method: request ? 'PUT' : 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      ...(settings ? { body: JSON.stringify(settings) } : {}),
+      ...(request ? { body: JSON.stringify(request) } : {}),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Hand the bridge a refreshed access token for the room it's sharing to. */
+export async function sendBridgeToken(accessToken: string): Promise<boolean> {
+  try {
+    const res = await fetch(bridgeHttpUrl('/room/token'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accessToken }),
     });
     return res.ok;
   } catch {
@@ -107,13 +126,12 @@ export class BridgeSource implements AgentEventSource {
         return;
       }
       if (parsed.type === 'hello') {
-        const { cloud, room, name, shareDetails, resumable, identity } = parsed;
+        const { cloud, room, resumable, needsToken, identity } = parsed;
         useSourceStore.getState().setBridgeIdentity({
           cloud: cloud ?? false,
           ...(room ? { room } : {}),
-          ...(name ? { name } : {}),
-          ...(shareDetails !== undefined ? { shareDetails } : {}),
           ...(resumable ? { resumable } : {}),
+          ...(needsToken ? { needsToken } : {}),
           ...(identity ? { identity } : {}),
         });
       }

@@ -5,13 +5,15 @@ import { useSourceStore } from '../sources/sourceStore';
 export function SharingBadge() {
   const bridge = useSourceStore((s) => s.bridgeIdentity);
   const connected = useSourceStore((s) => s.sources.bridge?.state === 'connected');
-  if (!connected || !bridge?.room) return null;
+  const room = bridge?.room;
+  if (!connected || !room) return null;
   return (
     <div className="sharing-badge" role="status">
       <span className="sharing-badge__dot" />
-      Sharing live in <b>{bridge.room}</b> as <b>{bridge.name}</b>
+      Sharing live in <b>{room.roomName}</b> as <b>{room.name}</b>
       {bridge.identity && <span className="sharing-badge__id">{keyFingerprint(bridge.identity)}</span>}
-      {bridge.shareDetails && <span className="sharing-badge__warn">+ files &amp; commands</span>}
+      {room.shareDetails && <span className="sharing-badge__warn">+ files &amp; commands</span>}
+      {bridge.needsToken && <span className="sharing-badge__warn">paused: open the app</span>}
     </div>
   );
 }
