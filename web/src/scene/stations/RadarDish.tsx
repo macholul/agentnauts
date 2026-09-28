@@ -144,7 +144,7 @@ export function RadarDish({ accent, activity }: StationVisualProps) {
       {/* Control box */}
       <group position={[0.85, 0, 0.45]} rotation-y={-0.6}>
         <RoundedBox args={[0.46, 0.44, 0.36]} radius={0.1} smoothness={3} position-y={0.32} castShadow>
-          <BodyMaterial />
+          <BodyMaterial textured />
         </RoundedBox>
         <RoundedBox args={[0.32, 0.14, 0.04]} radius={0.03} smoothness={2} position={[0, 0.42, 0.18]}>
           <meshStandardMaterial color="#2f3a5c" emissive={accent} emissiveIntensity={0.45} />

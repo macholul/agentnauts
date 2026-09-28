@@ -59,10 +59,10 @@ export function Fabricator({ accent, activity }: StationVisualProps) {
 
       {/* Body */}
       <RoundedBox args={[1.9, 0.52, 1.3]} radius={0.16} smoothness={4} position-y={0.44} castShadow receiveShadow>
-        <BodyMaterial />
+        <BodyMaterial textured />
       </RoundedBox>
       <RoundedBox args={[1.96, 0.12, 1.36]} radius={0.06} smoothness={3} position-y={0.25} castShadow>
-        <AccentMaterial color={accent} />
+        <AccentMaterial color={accent} textured />
       </RoundedBox>
 
       {/* Print bed */}
@@ -90,7 +90,7 @@ export function Fabricator({ accent, activity }: StationVisualProps) {
       {/* Print head */}
       <group ref={carriage} position={[0, 1.55, -0.05]}>
         <RoundedBox args={[0.36, 0.3, 0.36]} radius={0.08} smoothness={3} castShadow>
-          <AccentMaterial color={accent} />
+          <AccentMaterial color={accent} textured />
         </RoundedBox>
         <mesh position-y={-0.22} castShadow>
           <capsuleGeometry args={[0.055, 0.12, 4, 10]} />
@@ -111,7 +111,7 @@ export function Fabricator({ accent, activity }: StationVisualProps) {
 
       {/* Material hopper on the back */}
       <RoundedBox args={[0.5, 0.45, 0.4]} radius={0.12} smoothness={3} position={[0.55, 0.9, -0.5]} castShadow>
-        <AccentMaterial color={accent} />
+        <AccentMaterial color={accent} textured />
       </RoundedBox>
       <Antenna position={[-0.7, 0.7, -0.45]} height={0.55} color={accent} />
 

@@ -116,7 +116,7 @@ export function Scanner({ accent, activity }: StationVisualProps) {
       {/* Side console */}
       <group position={[0.95, 0, 0.55]} rotation-y={-0.5}>
         <RoundedBox args={[0.42, 0.5, 0.32]} radius={0.1} smoothness={3} position-y={0.35} castShadow>
-          <BodyMaterial />
+          <BodyMaterial textured />
         </RoundedBox>
         <RoundedBox args={[0.3, 0.18, 0.04]} radius={0.03} smoothness={2} position={[0, 0.46, 0.16]} rotation-x={-0.3}>
           <meshStandardMaterial color="#2f3a5c" emissive={accent} emissiveIntensity={0.5} />

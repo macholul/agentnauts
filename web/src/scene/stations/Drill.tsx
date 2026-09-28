@@ -55,10 +55,10 @@ export function Drill({ accent, activity }: StationVisualProps) {
       <group ref={rig}>
         {/* Base platform with hazard band */}
         <RoundedBox args={[1.4, 0.26, 1.4]} radius={0.1} smoothness={3} position-y={0.26} castShadow receiveShadow>
-          <BodyMaterial />
+          <BodyMaterial textured />
         </RoundedBox>
         <RoundedBox args={[1.46, 0.1, 1.46]} radius={0.05} smoothness={2} position-y={0.16} castShadow>
-          <AccentMaterial color={accent} />
+          <AccentMaterial color={accent} textured />
         </RoundedBox>
         {[-0.5, -0.27, -0.04].map((x) => (
           <RoundedBox key={x} args={[0.1, 0.12, 0.03]} radius={0.015} smoothness={2} position={[x, 0.29, 0.705]} rotation-z={0.6}>
@@ -80,7 +80,7 @@ export function Drill({ accent, activity }: StationVisualProps) {
 
         {/* Motor housing and warning light */}
         <RoundedBox args={[0.6, 0.48, 0.6]} radius={0.14} smoothness={4} position-y={2.02} castShadow>
-          <AccentMaterial color={accent} />
+          <AccentMaterial color={accent} textured />
         </RoundedBox>
         <mesh position-y={2.3}>
           <cylinderGeometry args={[0.2, 0.24, 0.1, 20]} />

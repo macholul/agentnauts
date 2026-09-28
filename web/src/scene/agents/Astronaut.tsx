@@ -36,6 +36,11 @@ const VISOR_GLINTS = (
   return { position, quaternion, scale: [...scale] as [number, number, number] };
 });
 
+/** Soft fabric: matte with a gentle lavender sheen at glancing angles. */
+function SuitMaterial() {
+  return <meshPhysicalMaterial color={SUIT} roughness={0.7} sheen={0.8} sheenRoughness={0.5} sheenColor="#d9c8ff" />;
+}
+
 interface LimbTargets {
   legL: number;
   legR: number;
@@ -222,11 +227,15 @@ export function Astronaut({ color, role, pose, seed }: AstronautProps) {
         <group key={x} ref={ref} position={[x, 0.25, 0]}>
           <mesh position-y={-0.09} castShadow>
             <capsuleGeometry args={[0.075, 0.09, 4, 12]} />
-            <meshStandardMaterial color={SUIT} roughness={0.6} />
+            <SuitMaterial />
           </mesh>
           <mesh position={[0, -0.19, 0.025]} scale={[1, 0.7, 1.3]} castShadow>
             <sphereGeometry args={[0.09, 16, 12]} />
             <meshStandardMaterial color={BOOT} roughness={0.7} />
+          </mesh>
+          <mesh position-y={-0.135} rotation-x={Math.PI / 2}>
+            <torusGeometry args={[0.072, 0.022, 8, 18]} />
+            <meshStandardMaterial color={color} roughness={0.5} />
           </mesh>
         </group>
       ))}
@@ -234,12 +243,15 @@ export function Astronaut({ color, role, pose, seed }: AstronautProps) {
       {/* Torso */}
       <mesh position-y={0.43} castShadow>
         <capsuleGeometry args={[0.19, 0.1, 6, 18]} />
-        <meshStandardMaterial color={SUIT} roughness={0.6} />
+        <SuitMaterial />
       </mesh>
       <mesh position-y={0.34} rotation-x={Math.PI / 2}>
         <torusGeometry args={[0.185, 0.035, 8, 24]} />
         <meshStandardMaterial color={color} roughness={0.5} />
       </mesh>
+      <RoundedBox args={[0.08, 0.05, 0.03]} radius={0.012} smoothness={2} position={[0, 0.34, 0.215]}>
+        <meshStandardMaterial color="#fff4dc" roughness={0.35} metalness={0.2} />
+      </RoundedBox>
       <RoundedBox args={[0.17, 0.1, 0.04]} radius={0.02} smoothness={2} position={[0, 0.47, 0.175]}>
         <meshStandardMaterial color={PALETTE.machineDark} roughness={0.5} />
       </RoundedBox>
@@ -258,9 +270,13 @@ export function Astronaut({ color, role, pose, seed }: AstronautProps) {
         ] as const
       ).map(([ref, x, z]) => (
         <group key={x} ref={ref} position={[x, 0.54, 0]} rotation-z={z}>
+          <mesh position-y={0.005} scale={[1, 0.7, 1]} castShadow>
+            <sphereGeometry args={[0.078, 14, 10]} />
+            <meshStandardMaterial color={color} roughness={0.5} />
+          </mesh>
           <mesh position-y={-0.1} castShadow>
             <capsuleGeometry args={[0.058, 0.12, 4, 12]} />
-            <meshStandardMaterial color={SUIT} roughness={0.6} />
+            <SuitMaterial />
           </mesh>
           <mesh position-y={-0.21} castShadow>
             <sphereGeometry args={[0.068, 14, 10]} />
@@ -274,8 +290,14 @@ export function Astronaut({ color, role, pose, seed }: AstronautProps) {
         <meshStandardMaterial color={color} roughness={0.5} />
       </RoundedBox>
       <RoundedBox args={[0.2, 0.08, 0.04]} radius={0.02} smoothness={2} position={[0, 0.55, -0.285]}>
-        <meshStandardMaterial color={SUIT} roughness={0.6} />
+        <SuitMaterial />
       </RoundedBox>
+      {[-0.17, 0.17].map((x) => (
+        <mesh key={x} position={[x, 0.47, -0.22]} castShadow>
+          <capsuleGeometry args={[0.045, 0.18, 4, 10]} />
+          <SuitMaterial />
+        </mesh>
+      ))}
       {[-0.08, 0.08].map((x) => (
         <mesh key={x} position={[x, 0.29, -0.22]}>
           <cylinderGeometry args={[0.04, 0.05, 0.06, 12]} />
@@ -331,6 +353,17 @@ export function Astronaut({ color, role, pose, seed }: AstronautProps) {
           <torusGeometry args={[0.16, 0.04, 8, 24]} />
           <meshStandardMaterial color={color} roughness={0.5} />
         </mesh>
+        {/* Little helmet lamp */}
+        <group position={[0, 0.54, 0.1]} rotation-x={0.35}>
+          <mesh>
+            <capsuleGeometry args={[0.035, 0.05, 4, 10]} />
+            <meshStandardMaterial color={color} roughness={0.5} />
+          </mesh>
+          <mesh position={[0, 0.02, 0.03]}>
+            <sphereGeometry args={[0.022, 10, 8]} />
+            <meshStandardMaterial color="#fffbe8" emissive="#fff1c2" emissiveIntensity={1.4} />
+          </mesh>
+        </group>
         {[-0.3, 0.3].map((x) => (
           <mesh key={x} position={[x, 0.26, 0]} rotation-z={Math.PI / 2}>
             <cylinderGeometry args={[0.06, 0.06, 0.05, 16]} />

@@ -4,6 +4,7 @@
  */
 import type { RefObject } from 'react';
 import { PALETTE } from '../../world/config';
+import { panelTexture } from '../textures';
 
 /** 0..1 "how busy is this station" value, smoothed per frame. */
 export type ActivityRef = RefObject<number>;
@@ -13,16 +14,24 @@ export interface StationVisualProps {
   activity: ActivityRef;
 }
 
-export function BodyMaterial() {
-  return <meshStandardMaterial color={PALETTE.machineBody} roughness={0.55} metalness={0.02} />;
+/** `textured` adds soft panel seams and rivets (for rounded boxes, whose UVs map one panel per face). */
+export function BodyMaterial({ textured = false }: { textured?: boolean }) {
+  return (
+    <meshStandardMaterial
+      color={PALETTE.machineBody}
+      map={textured ? panelTexture() : null}
+      roughness={0.55}
+      metalness={0.02}
+    />
+  );
 }
 
 export function DarkMaterial() {
   return <meshStandardMaterial color={PALETTE.machineDark} roughness={0.6} metalness={0.05} />;
 }
 
-export function AccentMaterial({ color }: { color: string }) {
-  return <meshStandardMaterial color={color} roughness={0.45} metalness={0.02} />;
+export function AccentMaterial({ color, textured = false }: { color: string; textured?: boolean }) {
+  return <meshStandardMaterial color={color} map={textured ? panelTexture() : null} roughness={0.45} metalness={0.02} />;
 }
 
 /** Rounded base plate every machine sits on. */
@@ -37,6 +46,16 @@ export function Foundation({ radius }: { radius: number }) {
         <torusGeometry args={[radius - 0.02, 0.05, 8, 40]} />
         <meshStandardMaterial color="#e3cfe2" roughness={0.85} />
       </mesh>
+      {/* Bolts around the plate */}
+      {Array.from({ length: 12 }, (_, i) => {
+        const angle = (i / 12) * Math.PI * 2;
+        return (
+          <mesh key={i} position={[Math.cos(angle) * (radius - 0.16), 0.105, Math.sin(angle) * (radius - 0.16)]} scale={[1, 0.5, 1]}>
+            <sphereGeometry args={[0.035, 10, 6]} />
+            <meshStandardMaterial color="#cdb8d6" roughness={0.5} />
+          </mesh>
+        );
+      })}
     </group>
   );
 }

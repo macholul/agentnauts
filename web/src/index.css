@@ -28,6 +28,15 @@ body,
   inset: 0;
 }
 
+/* Soft warm vignette that frames the scene without hiding anything. */
+.app::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 48%, transparent 55%, rgba(150, 90, 130, 0.22) 100%);
+}
+
 /* Floating name labels above astronauts (drei <Html>). */
 .agent-label {
   display: inline-flex;

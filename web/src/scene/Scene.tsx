@@ -5,6 +5,7 @@ import { Agents } from './agents/Agents';
 import { CameraRig } from './CameraRig';
 import { Lighting } from './environment/Lighting';
 import { Decorations } from './terrain/Decorations';
+import { GroundClutter } from './terrain/GroundClutter';
 import { PlanetSurface } from './terrain/PlanetSurface';
 import { Stations } from './stations/Stations';
 
@@ -25,6 +26,7 @@ export function Scene() {
       <CameraRig />
       <Lighting />
       <PlanetSurface />
+      <GroundClutter />
       <Decorations />
       <Stations />
       <Agents />

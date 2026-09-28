@@ -2,6 +2,10 @@ import { useMemo } from 'react';
 import { BufferGeometry, Color, Float32BufferAttribute } from 'three';
 import { PALETTE, SURFACE } from '../../world/config';
 import { craterAmount, hillAmount, smoothstep, terrainHeight } from '../../world/terrain';
+import { groundTexture } from '../textures';
+
+/** World units covered by one repeat of the ground texture. */
+const TEXTURE_TILE = 7;
 
 const CELLS = 170; // grid cells per side
 /**
@@ -30,6 +34,7 @@ function patch(x: number, z: number): number {
 function buildSurface(): BufferGeometry {
   const positions: number[] = [];
   const colors: number[] = [];
+  const uvs: number[] = [];
   const indices: number[] = [];
 
   const top = new Color(PALETTE.terrainTop);
@@ -56,6 +61,7 @@ function buildSurface(): BufferGeometry {
       const z = warp(v + jv);
       const y = terrainHeight(x, z);
       positions.push(x, y, z);
+      uvs.push(x / TEXTURE_TILE, z / TEXTURE_TILE);
 
       const r = Math.hypot(x, z);
       const hills = hillAmount(x, z);
@@ -94,6 +100,7 @@ function buildSurface(): BufferGeometry {
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
   geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+  geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   return geometry;
@@ -101,9 +108,10 @@ function buildSurface(): BufferGeometry {
 
 export function PlanetSurface() {
   const geometry = useMemo(buildSurface, []);
+  const map = useMemo(groundTexture, []);
   return (
     <mesh geometry={geometry} receiveShadow castShadow>
-      <meshStandardMaterial vertexColors flatShading roughness={0.95} metalness={0} />
+      <meshStandardMaterial map={map} vertexColors flatShading roughness={0.95} metalness={0} />
     </mesh>
   );
 }
