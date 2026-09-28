@@ -9,8 +9,9 @@
  * for the web app), e.g. to point a fork at its own project.
  */
 export const CLOUD = {
-  supabaseUrl: '',
-  supabaseAnonKey: '',
+  supabaseUrl: 'https://ukcwdorzglnawnjfeazz.supabase.co',
+  supabaseAnonKey:
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVrY3dkb3J6Z2xuYXduamZlYXp6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA2MDEwMTMsImV4cCI6MjEwNjE3NzAxM30.vStCSfebALGb-3jf3RllvVGLJu4NitbJ3UzLMVrO510',
 };
 
 export interface CloudSettings {
