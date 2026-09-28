@@ -73,7 +73,8 @@ export const STALE_AFTER_MS = 30 * 60_000;
 /** Crew whose SubagentStop never arrived fly home after this long. */
 export const CREW_STALE_AFTER_MS = 5 * 60_000;
 
-const COMMANDER_COLORS = ['#5b8def', '#ff6b8b', '#8a6cff', '#20b8a6', '#f59f00', '#56b35f', '#ff7a45', '#3fb5e8'];
+/** Ordered for contrast: the first few sessions get clearly different colors. */
+const COMMANDER_COLORS = ['#5b8def', '#ff6b8b', '#20b8a6', '#f59f00', '#8a6cff', '#56b35f', '#ff7a45', '#3fb5e8'];
 
 function hashString(value: string): number {
   let h = 2166136261;
@@ -98,12 +99,8 @@ function mixHex(a: string, b: string, t: number): string {
 
 function pickCommanderColor(sessionId: string, agents: Record<string, Agent>): string {
   const used = new Set(Object.values(agents).filter((a) => a.role === 'commander').map((a) => a.color));
-  const start = hashString(sessionId) % COMMANDER_COLORS.length;
-  for (let i = 0; i < COMMANDER_COLORS.length; i++) {
-    const color = COMMANDER_COLORS[(start + i) % COMMANDER_COLORS.length]!;
-    if (!used.has(color)) return color;
-  }
-  return COMMANDER_COLORS[start]!;
+  const free = COMMANDER_COLORS.find((color) => !used.has(color));
+  return free ?? COMMANDER_COLORS[hashString(sessionId) % COMMANDER_COLORS.length]!;
 }
 
 export function crewId(sessionId: string, subagentId: string): string {
@@ -254,6 +251,9 @@ function startLeaving(agent: Agent, now: number): Agent {
 
 /** Turn an intent into agent changes. */
 function applyIntent(agents: Agents, agent: Agent, intent: Intent, event: AgentEvent, now: number): Agent {
+  // Already flying home: let it go. A later event for the same id respawns it.
+  if (agent.lifecycle === 'leaving') return agent;
+
   let next: Agent = {
     ...agent,
     lastEventAt: now,

@@ -1,0 +1,66 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
+          }
+        ]
+      }
+    ]
+  }
+}
