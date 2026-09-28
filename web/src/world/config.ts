@@ -54,7 +54,7 @@ export const SURFACE = {
   /** How far the terrain mesh extends (well past anything the camera shows). */
   radius: 120,
   /** Mostly flat base area where the stations are. */
-  baseRadius: 13,
+  baseRadius: 15.5,
   /** Astronauts stay inside this radius. */
   walkRadius: 12.5,
   /** Height of the rolling hills outside the base. */
@@ -62,7 +62,10 @@ export const SURFACE = {
 } as const;
 
 /** Stations and the pad are built at this scale (bigger toys, more readable). */
-export const STATION_SCALE = 1.3;
+export const STATION_SCALE = 1.65;
+
+/** The landing pad is built at its own scale. */
+export const PAD_SCALE = 1.3;
 
 // ---------------------------------------------------------------------------
 // Stations
@@ -140,10 +143,10 @@ function station(
 }
 
 export const STATIONS: Record<StationId, StationConfig> = {
-  fabricator: station('fabricator', 'Fabricator', 'Edit / Write files', '#ff8a3d', [-9, 0, -1.5], 1.35, 1.75),
-  scanner: station('scanner', 'Scanner', 'Read / Grep / Glob', '#2ec4b6', [-1.5, 0, -9], 1.2, 1.65),
-  drill: station('drill', 'Drill', 'Bash commands', '#ffc23c', [-5, 0, 7.5], 1.2, 1.7),
-  radar: station('radar', 'Radar Dish', 'Web search / fetch', '#ff6f9f', [7.5, 0, -5], 1.25, 1.75),
+  fabricator: station('fabricator', 'Fabricator', 'Edit / Write files', '#ff8a3d', [-10, 0, -1.7], 1.35, 1.75),
+  scanner: station('scanner', 'Scanner', 'Read / Grep / Glob', '#2ec4b6', [-1.7, 0, -10], 1.2, 1.65),
+  drill: station('drill', 'Drill', 'Bash commands', '#ffc23c', [-5.6, 0, 8.3], 1.2, 1.7),
+  radar: station('radar', 'Radar Dish', 'Web search / fetch', '#ff6f9f', [8.3, 0, -5.6], 1.25, 1.75),
 };
 
 // ---------------------------------------------------------------------------
@@ -151,13 +154,13 @@ export const STATIONS: Record<StationId, StationConfig> = {
 // ---------------------------------------------------------------------------
 
 const PAD_POSITION: Vec3 = [1.5, 0, 1.5];
-const PAD_RADIUS = 1.55 * STATION_SCALE;
+const PAD_RADIUS = 1.55 * PAD_SCALE;
 
 export const LANDING_PAD = {
   position: PAD_POSITION,
   radius: PAD_RADIUS,
   /** Height of the pad deck above the ground. */
-  deckHeight: 0.2 * STATION_SCALE,
+  deckHeight: 0.2 * PAD_SCALE,
   /** Where waiting astronauts stand (on the pad, facing the camera). */
   slots: [
     [PAD_POSITION[0], 0, PAD_POSITION[2]],

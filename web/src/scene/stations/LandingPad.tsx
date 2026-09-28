@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { RoundedBox } from '@react-three/drei';
 import { Color, type Group, type MeshStandardMaterial } from 'three';
-import { LANDING_PAD, PALETTE, STATION_SCALE } from '../../world/config';
+import { LANDING_PAD, PAD_SCALE, PALETTE } from '../../world/config';
 import type { ActivityRef } from './parts';
 
 const LIGHTS = 12;
@@ -36,9 +36,9 @@ export function LandingPad({ activity }: { activity: ActivityRef }) {
     if (flag.current) flag.current.rotation.y = Math.sin(t * 1.7) * 0.25 + 0.2;
   });
 
-  // Drawn inside a group scaled by STATION_SCALE.
-  const radius = LANDING_PAD.radius / STATION_SCALE;
-  const deckHeight = LANDING_PAD.deckHeight / STATION_SCALE;
+  // Drawn inside a group scaled by PAD_SCALE.
+  const radius = LANDING_PAD.radius / PAD_SCALE;
+  const deckHeight = LANDING_PAD.deckHeight / PAD_SCALE;
 
   return (
     <group>

@@ -104,17 +104,21 @@ export function hillAmount(x: number, z: number): number {
 /** Terrain height at (x, z). */
 export function terrainHeight(x: number, z: number): number {
   // Small rolling bumps plus fine roughness that makes the low-poly facets read.
-  let bumps = fbm(x * 0.2, z * 0.2) * 0.45 + fbm(x * 0.9 + 11, z * 0.9 - 3) * 0.14;
-  for (const zone of FLAT_ZONES) {
-    const d = Math.hypot(x - zone.x, z - zone.z);
-    bumps *= smoothstep(zone.radius * 0.75, zone.radius * 1.4, d);
-  }
+  const bumps = fbm(x * 0.2, z * 0.2) * 0.45 + fbm(x * 0.9 + 11, z * 0.9 - 3) * 0.14;
 
   // Big soft hills beyond the base.
   const hills = hillAmount(x, z);
   const hillShape = (fbm(x * 0.05, z * 0.05) * 0.8 + 0.75) * SURFACE.hillHeight + fbm(x * 0.14 + 5, z * 0.14) * 1.6;
 
-  return bumps + craterOffset(x, z) + hills * Math.max(0, hillShape);
+  // Everything (bumps, craters, hills) fades to 0 under stations and the pad,
+  // so machines always sit level at y = 0 and never sink into the ground.
+  let flat = 1;
+  for (const zone of FLAT_ZONES) {
+    const d = Math.hypot(x - zone.x, z - zone.z);
+    flat *= smoothstep(zone.radius * 0.75, zone.radius * 1.4, d);
+  }
+
+  return (bumps + craterOffset(x, z) + hills * Math.max(0, hillShape)) * flat;
 }
 
 /** Point on the terrain surface above (x, z). */
