@@ -1,6 +1,6 @@
 /**
  * Tiny navigation: circular obstacles plus a ring of waypoints around the
- * middle of the chunk. Paths go straight when nothing is in the way and
+ * middle of the base. Paths go straight when nothing is in the way and
  * otherwise hop along the ring (shortest path over a visibility graph).
  */
 import { DECORATIONS, LANDING_PAD, STATIONS, WAYPOINT_RING, type Vec3 } from './config';
@@ -118,7 +118,7 @@ export function planPath(from: Vec3, to: Vec3): Vec3[] {
 export function randomWanderPoint(from: Vec3, random: () => number = Math.random): Vec3 {
   for (let attempt = 0; attempt < 40; attempt++) {
     const angle = random() * Math.PI * 2;
-    const distance = 1.5 + random() * 3.5;
+    const distance = 2.5 + random() * 5.5;
     const x = from[0] + Math.cos(angle) * distance;
     const z = from[2] + Math.sin(angle) * distance;
     if (!pointClear(x, z, 0.25)) continue;

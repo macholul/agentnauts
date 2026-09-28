@@ -10,11 +10,11 @@ import { Astronaut } from './Astronaut';
 import { WaitingBubble } from './WaitingBubble';
 import { createPose } from './pose';
 
-const WALK_SPEED: Record<AgentRole, number> = { commander: 1.7, crew: 2.1 };
-const SCALE: Record<AgentRole, number> = { commander: 1.35, crew: 1.0 };
+const WALK_SPEED: Record<AgentRole, number> = { commander: 2.4, crew: 2.9 };
+const SCALE: Record<AgentRole, number> = { commander: 1.55, crew: 1.15 };
 const ARRIVE_SECONDS = 1.8;
 const LEAVE_SECONDS = 2.2;
-const DROP_HEIGHT = 14;
+const DROP_HEIGHT = 20;
 
 function hash01(value: string): number {
   let h = 2166136261;
@@ -142,7 +142,7 @@ export function AgentActor({ id }: { id: string }) {
         // Crouch and fire up the jetpack.
         p.squash = Math.max(p.squash, 0.6 * (t / 0.2));
       } else {
-        // Blast off up and outward, away from the middle of the chunk.
+        // Blast off up and outward, away from the middle of the base.
         const k = easeInCubic((t - 0.2) / 0.8);
         const len = Math.hypot(n.from.x, n.from.z) || 1;
         n.pos.set(

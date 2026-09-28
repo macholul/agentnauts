@@ -2,7 +2,7 @@ import { useRef, type ComponentType } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { AdditiveBlending, type MeshBasicMaterial } from 'three';
 import type { StationId } from '@groundcrew/shared';
-import { LANDING_PAD, STATIONS, type StationConfig } from '../../world/config';
+import { LANDING_PAD, STATION_SCALE, STATIONS, type StationConfig } from '../../world/config';
 import { Drill } from './Drill';
 import { Fabricator } from './Fabricator';
 import { LandingPad } from './LandingPad';
@@ -46,9 +46,9 @@ function StationMount({ config }: { config: StationConfig }) {
   const Visual = VISUALS[config.id];
   const activity = useStationActivity(config.id);
   return (
-    <group position={config.position} rotation-y={config.yaw}>
+    <group position={config.position} rotation-y={config.yaw} scale={STATION_SCALE}>
       <Visual accent={config.accent} activity={activity} />
-      <GroundGlow radius={config.footprint} color={config.accent} activity={activity} />
+      <GroundGlow radius={config.footprint / STATION_SCALE} color={config.accent} activity={activity} />
     </group>
   );
 }
@@ -60,7 +60,7 @@ export function Stations() {
       {Object.values(STATIONS).map((config) => (
         <StationMount key={config.id} config={config} />
       ))}
-      <group position={LANDING_PAD.position}>
+      <group position={LANDING_PAD.position} scale={STATION_SCALE}>
         <LandingPad activity={padActivity} />
       </group>
     </>

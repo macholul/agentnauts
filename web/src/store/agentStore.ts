@@ -1,5 +1,5 @@
 /**
- * Agent store: every astronaut on the chunk, keyed by id.
+ * Agent store: every astronaut on the planet, keyed by id.
  *
  * Only plain, serializable data lives here (ids, states, station names,
  * positions as [x, y, z]) so the whole map can later be synced over the

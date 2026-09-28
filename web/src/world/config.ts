@@ -1,9 +1,12 @@
 /**
- * World layout: the single source of truth for where things are on the chunk.
+ * World layout: the single source of truth for where things are on the
+ * planet surface.
  *
  * Station positions, approach points (where astronauts stand to work),
  * the landing pad, decorations and camera limits all live here. Coordinates
- * are in world units, y-up. The chunk's top surface sits around y = 0.
+ * are in world units, y-up. The base area around the origin sits near y = 0;
+ * the surface keeps going well past the edges of the screen, rising into
+ * hills away from the base.
  *
  * The default camera looks from +X/+Z toward the origin, so on screen
  * "right" is +X/-Z and "far" is -X/-Z.
@@ -17,21 +20,22 @@ export type Vec3 = [number, number, number];
 // ---------------------------------------------------------------------------
 
 export const PALETTE = {
-  terrainTop: '#f7b99c',
-  terrainHigh: '#fcd3b8',
-  terrainLow: '#ec9f88',
+  terrainTop: '#f5b497',
+  terrainHigh: '#fcd0b3',
+  terrainLow: '#e89b86',
+  /** Leveled ground of the base area. */
+  baseGround: '#e2a193',
+  hillLow: '#ea9f8a',
+  hillHigh: '#fbd2b8',
   craterFloor: '#e3a3a0',
-  // Alternating light/dark bands read as layered rock from a distance.
-  strata: ['#f09a84', '#dd7a70', '#f2ad8e', '#c47489', '#a97fb4', '#7c6aa8'],
-  underside: '#5a5190',
-  // The camera always looks down, so only the part of the sky dome below the
-  // horizon is ever on screen: peach glow near the horizon, cooling to
-  // periwinkle underneath.
+  /** Soft lavender patches across the ground. */
+  groundPatch: '#dba3b8',
+  /** Far-away haze the terrain fades into (also the background color). */
+  haze: '#f0c2b6',
+  // Used by the baked lighting environment (reflections on visors).
   skyZenith: '#94b8ee',
   skyHorizon: '#ffd2bb',
-  skyLow: '#f6b9cb',
   skyMid: '#c9b3ea',
-  skyNadir: '#98a3e6',
   shadowTint: '#9d86c7',
   sunlight: '#fff0dc',
   machineBody: '#fbf3ea',
@@ -43,17 +47,22 @@ export const PALETTE = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Chunk
+// Surface
 // ---------------------------------------------------------------------------
 
-export const CHUNK = {
-  /** Average radius of the chunk's top surface. */
-  radius: 8.2,
-  /** Walkable radius (astronauts stay inside this). */
-  walkRadius: 6.7,
-  /** Lowest point of the tapering underside. */
-  bottomY: -9.2,
+export const SURFACE = {
+  /** How far the terrain mesh extends (well past anything the camera shows). */
+  radius: 120,
+  /** Mostly flat base area where the stations are. */
+  baseRadius: 13,
+  /** Astronauts stay inside this radius. */
+  walkRadius: 12.5,
+  /** Height of the rolling hills outside the base. */
+  hillHeight: 5,
 } as const;
+
+/** Stations and the pad are built at this scale (bigger toys, more readable). */
+export const STATION_SCALE = 1.3;
 
 // ---------------------------------------------------------------------------
 // Stations
@@ -114,9 +123,9 @@ function station(
   footprint: number,
   approachDistance: number,
 ): StationConfig {
-  // Every station faces the middle of the chunk.
+  // Every station faces the middle of the base.
   const yaw = yawToward(position, [0, 0, 0]);
-  const approach = approachSlots(position, yaw, approachDistance, 1.0);
+  const approach = approachSlots(position, yaw, approachDistance * STATION_SCALE, 1.2);
   return {
     id,
     label,
@@ -124,37 +133,38 @@ function station(
     accent,
     position,
     yaw,
-    footprint,
+    footprint: footprint * STATION_SCALE,
     approach,
     workYaw: yaw + Math.PI,
   };
 }
 
 export const STATIONS: Record<StationId, StationConfig> = {
-  fabricator: station('fabricator', 'Fabricator', 'Edit / Write files', '#ff8a3d', [-4.8, 0, -1.2], 1.35, 1.75),
-  scanner: station('scanner', 'Scanner', 'Read / Grep / Glob', '#2ec4b6', [-1.2, 0, -4.8], 1.2, 1.65),
-  drill: station('drill', 'Drill', 'Bash commands', '#ffc23c', [-2.5, 0, 4.3], 1.2, 1.7),
-  radar: station('radar', 'Radar Dish', 'Web search / fetch', '#ff6f9f', [4.3, 0, -2.5], 1.25, 1.75),
+  fabricator: station('fabricator', 'Fabricator', 'Edit / Write files', '#ff8a3d', [-9, 0, -1.5], 1.35, 1.75),
+  scanner: station('scanner', 'Scanner', 'Read / Grep / Glob', '#2ec4b6', [-1.5, 0, -9], 1.2, 1.65),
+  drill: station('drill', 'Drill', 'Bash commands', '#ffc23c', [-5, 0, 7.5], 1.2, 1.7),
+  radar: station('radar', 'Radar Dish', 'Web search / fetch', '#ff6f9f', [7.5, 0, -5], 1.25, 1.75),
 };
 
 // ---------------------------------------------------------------------------
 // Landing pad
 // ---------------------------------------------------------------------------
 
-const PAD_POSITION: Vec3 = [1.0, 0, 1.0];
+const PAD_POSITION: Vec3 = [1.5, 0, 1.5];
+const PAD_RADIUS = 1.55 * STATION_SCALE;
 
 export const LANDING_PAD = {
   position: PAD_POSITION,
-  radius: 1.55,
+  radius: PAD_RADIUS,
   /** Height of the pad deck above the ground. */
-  deckHeight: 0.2,
+  deckHeight: 0.2 * STATION_SCALE,
   /** Where waiting astronauts stand (on the pad, facing the camera). */
   slots: [
     [PAD_POSITION[0], 0, PAD_POSITION[2]],
-    [PAD_POSITION[0] - 0.75, 0, PAD_POSITION[2] + 0.35],
-    [PAD_POSITION[0] + 0.35, 0, PAD_POSITION[2] - 0.75],
-    [PAD_POSITION[0] + 0.55, 0, PAD_POSITION[2] + 0.6],
-    [PAD_POSITION[0] - 0.6, 0, PAD_POSITION[2] - 0.55],
+    [PAD_POSITION[0] - 1.0, 0, PAD_POSITION[2] + 0.45],
+    [PAD_POSITION[0] + 0.45, 0, PAD_POSITION[2] - 1.0],
+    [PAD_POSITION[0] + 0.75, 0, PAD_POSITION[2] + 0.8],
+    [PAD_POSITION[0] - 0.8, 0, PAD_POSITION[2] - 0.75],
   ] as Vec3[],
   /** Waiting astronauts look toward the camera. */
   waitYaw: Math.PI / 4,
@@ -165,10 +175,11 @@ export const LANDING_PAD = {
 // ---------------------------------------------------------------------------
 
 /** Radius of the ring of waypoints astronauts use to walk around obstacles. */
-export const WAYPOINT_RING = { radius: 3.0, count: 12 } as const;
+export const WAYPOINT_RING = { radius: 5.2, count: 16 } as const;
 
 // ---------------------------------------------------------------------------
-// Decorations (rocks and alien plants); rocks also block walking.
+// Decorations: small props around the base (rocks and crystals block
+// walking) plus big scenery out in the hills.
 // ---------------------------------------------------------------------------
 
 export type DecorationKind = 'rock' | 'plant' | 'crystal' | 'mushroom';
@@ -181,25 +192,65 @@ export interface DecorationConfig {
   color: string;
 }
 
-export const DECORATIONS: DecorationConfig[] = [
-  { kind: 'rock', position: [5.6, 0, 2.8], scale: 0.75, rotation: 0.4, color: '#d7a3b4' },
-  { kind: 'rock', position: [6.1, 0, 2.0], scale: 0.42, rotation: 1.9, color: '#c795b4' },
-  { kind: 'rock', position: [-5.9, 0, 2.3], scale: 0.62, rotation: 2.2, color: '#c996a8' },
-  { kind: 'rock', position: [2.3, 0, -6.1], scale: 0.7, rotation: 5.1, color: '#dca7a6' },
-  { kind: 'rock', position: [-4.1, 0, -4.9], scale: 0.48, rotation: 3.3, color: '#cf9cb8' },
-  { kind: 'rock', position: [3.1, 0, 5.7], scale: 0.55, rotation: 0.9, color: '#d4a0ae' },
-  { kind: 'plant', position: [5.0, 0, 3.7], scale: 1, rotation: 0, color: '#8ee6c4' },
-  { kind: 'plant', position: [-6.2, 0, -1.7], scale: 0.85, rotation: 1, color: '#6fd6c9' },
-  { kind: 'plant', position: [0.8, 0, -6.5], scale: 1.1, rotation: 2, color: '#8ee6c4' },
-  { kind: 'plant', position: [-1.0, 0, 6.2], scale: 0.9, rotation: 3, color: '#a3e9b8' },
-  { kind: 'plant', position: [6.2, 0, -0.5], scale: 0.8, rotation: 4, color: '#6fd6c9' },
-  { kind: 'crystal', position: [-5.3, 0, 4.1], scale: 0.8, rotation: 0.3, color: '#b9a2ff' },
-  { kind: 'crystal', position: [3.9, 0, -5.2], scale: 0.9, rotation: 1.2, color: '#9fd8ff' },
-  { kind: 'crystal', position: [-3.1, 0, -6.3], scale: 0.7, rotation: 2.1, color: '#b9a2ff' },
-  { kind: 'mushroom', position: [2.0, 0, 4.7], scale: 0.9, rotation: 0.7, color: '#ff9fc0' },
-  { kind: 'mushroom', position: [-6.5, 0, 0.5], scale: 0.7, rotation: 1.4, color: '#ffb38a' },
-  { kind: 'mushroom', position: [5.3, 0, -4.0], scale: 0.8, rotation: 2.6, color: '#ff9fc0' },
-];
+/** Small deterministic PRNG so the scattered props are the same every load. */
+function mulberry32(seed: number): () => number {
+  let a = seed;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const DECORATION_COLORS: Record<DecorationKind, string[]> = {
+  rock: ['#d7a3b4', '#c795b4', '#c996a8', '#dca7a6', '#cf9cb8', '#d4a0ae'],
+  plant: ['#8ee6c4', '#6fd6c9', '#a3e9b8'],
+  crystal: ['#b9a2ff', '#9fd8ff', '#c7b0ff'],
+  mushroom: ['#ff9fc0', '#ffb38a', '#ff9fc0'],
+};
+
+/** Keep props off the stations, their work spots, the pad and the paths into the middle. */
+function keepsClear(x: number, z: number, margin: number): boolean {
+  for (const s of Object.values(STATIONS)) {
+    if (Math.hypot(x - s.position[0], z - s.position[2]) < s.footprint + margin + 1.2) return false;
+    for (const a of s.approach) if (Math.hypot(x - a[0], z - a[2]) < margin + 1.0) return false;
+  }
+  return Math.hypot(x - PAD_POSITION[0], z - PAD_POSITION[2]) > PAD_RADIUS + margin + 1.5;
+}
+
+function scatter(): DecorationConfig[] {
+  const rand = mulberry32(7);
+  const out: DecorationConfig[] = [];
+  const place = (kind: DecorationKind, count: number, minR: number, maxR: number, minS: number, maxS: number) => {
+    let placed = 0;
+    for (let attempt = 0; attempt < count * 30 && placed < count; attempt++) {
+      const angle = rand() * Math.PI * 2;
+      const r = minR + Math.sqrt(rand()) * (maxR - minR);
+      const x = Math.cos(angle) * r;
+      const z = Math.sin(angle) * r;
+      const scale = minS + rand() * (maxS - minS);
+      if (!keepsClear(x, z, scale)) continue;
+      if (out.some((d) => Math.hypot(d.position[0] - x, d.position[2] - z) < (d.scale + scale) * 1.1 + 0.6)) continue;
+      const colors = DECORATION_COLORS[kind];
+      out.push({ kind, position: [x, 0, z], scale, rotation: rand() * Math.PI * 2, color: colors[placed % colors.length]! });
+      placed++;
+    }
+  };
+  // Around the base, where astronauts walk.
+  place('rock', 9, 4, 12.5, 0.4, 0.85);
+  place('plant', 12, 3.5, 13, 0.8, 1.2);
+  place('crystal', 6, 5, 12.5, 0.7, 1.0);
+  place('mushroom', 7, 3.5, 12.5, 0.7, 1.0);
+  // Scenery out in the hills (outside the walkable area).
+  place('rock', 30, 14.5, 55, 1.2, 3.6);
+  place('crystal', 16, 15.5, 50, 1.3, 2.6);
+  place('plant', 22, 15, 45, 1.3, 2.4);
+  place('mushroom', 12, 15, 40, 1.1, 2.2);
+  return out;
+}
+
+export const DECORATIONS: DecorationConfig[] = scatter();
 
 // ---------------------------------------------------------------------------
 // Camera
@@ -207,15 +258,16 @@ export const DECORATIONS: DecorationConfig[] = [
 
 export const CAMERA = {
   fov: 32,
-  target: [0, -1.9, 0] as Vec3,
+  target: [0, 0, 0] as Vec3,
   /** Default view direction (spherical angles around the target). */
   azimuth: Math.PI / 4,
-  polar: 1.02,
-  distance: 33,
-  /** OrbitControls limits: small angle range, clamped zoom, no panning. */
-  azimuthRange: 0.6,
-  minPolar: 0.72,
-  maxPolar: 1.18,
-  minDistance: 17,
-  maxDistance: 44,
+  /** Angle from straight down: high enough that the horizon never shows. */
+  polar: 0.9,
+  distance: 44,
+  /** OrbitControls limits: modest angle range, clamped zoom, no panning. */
+  azimuthRange: 0.9,
+  minPolar: 0.45,
+  maxPolar: 1.0,
+  minDistance: 20,
+  maxDistance: 62,
 } as const;

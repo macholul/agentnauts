@@ -4,9 +4,8 @@ import { CAMERA, PALETTE } from '../world/config';
 import { Agents } from './agents/Agents';
 import { CameraRig } from './CameraRig';
 import { Lighting } from './environment/Lighting';
-import { Sky } from './environment/Sky';
 import { Decorations } from './terrain/Decorations';
-import { TerrainChunk } from './terrain/TerrainChunk';
+import { PlanetSurface } from './terrain/PlanetSurface';
 import { Stations } from './stations/Stations';
 
 /**
@@ -21,11 +20,11 @@ export function Scene() {
       camera={{ fov: CAMERA.fov, near: 0.5, far: 1200, position: [20, 18, 20] }}
       gl={{ antialias: true, toneMapping: NeutralToneMapping, toneMappingExposure: 1.0 }}
     >
-      <fog attach="fog" args={[PALETTE.skyLow, 70, 260]} />
+      <color attach="background" args={[PALETTE.haze]} />
+      <fog attach="fog" args={[PALETTE.haze, 60, 150]} />
       <CameraRig />
       <Lighting />
-      <Sky />
-      <TerrainChunk />
+      <PlanetSurface />
       <Decorations />
       <Stations />
       <Agents />

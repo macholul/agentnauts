@@ -19,7 +19,7 @@ body,
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: linear-gradient(#94b8ee, #c7b5ec 55%, #ffcbb4);
+  background: #f0c2b6;
   color: var(--ink);
 }
 

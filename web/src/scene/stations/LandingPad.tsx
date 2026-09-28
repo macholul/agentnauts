@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { RoundedBox } from '@react-three/drei';
 import { Color, type Group, type MeshStandardMaterial } from 'three';
-import { LANDING_PAD, PALETTE } from '../../world/config';
+import { LANDING_PAD, PALETTE, STATION_SCALE } from '../../world/config';
 import type { ActivityRef } from './parts';
 
 const LIGHTS = 12;
@@ -10,7 +10,7 @@ const CALM = new Color(PALETTE.teal);
 const ALERT = new Color('#ffb020');
 
 /**
- * Landing pad near the middle of the chunk. Astronauts wait here when their
+ * Landing pad near the middle of the base. Astronauts wait here when their
  * agent needs the user; the rim lights switch to a blinking amber when anyone
  * is waiting. Crew astronauts also touch down here.
  */
@@ -36,7 +36,9 @@ export function LandingPad({ activity }: { activity: ActivityRef }) {
     if (flag.current) flag.current.rotation.y = Math.sin(t * 1.7) * 0.25 + 0.2;
   });
 
-  const { radius, deckHeight } = LANDING_PAD;
+  // Drawn inside a group scaled by STATION_SCALE.
+  const radius = LANDING_PAD.radius / STATION_SCALE;
+  const deckHeight = LANDING_PAD.deckHeight / STATION_SCALE;
 
   return (
     <group>

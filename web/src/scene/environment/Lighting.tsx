@@ -9,23 +9,23 @@ import { PALETTE } from '../../world/config';
 export function Lighting() {
   return (
     <>
-      <hemisphereLight args={['#fff1e3', PALETTE.shadowTint, 1.35]} />
+      <hemisphereLight args={['#fff1e3', PALETTE.shadowTint, 1.1]} />
       <ambientLight color="#c9b8ee" intensity={0.35} />
       <directionalLight
         color={PALETTE.sunlight}
-        intensity={2.4}
-        position={[-4, 14, 9]}
+        intensity={2.8}
+        position={[-8, 26, 16]}
         castShadow
         shadow-mapSize={[2048, 2048]}
         shadow-bias={-0.0004}
         shadow-normalBias={0.03}
         shadow-radius={4}
-        shadow-camera-left={-12}
-        shadow-camera-right={12}
-        shadow-camera-top={12}
-        shadow-camera-bottom={-12}
+        shadow-camera-left={-24}
+        shadow-camera-right={24}
+        shadow-camera-top={24}
+        shadow-camera-bottom={-24}
         shadow-camera-near={1}
-        shadow-camera-far={45}
+        shadow-camera-far={80}
       />
       {/* Cool rim light from behind for chunky silhouettes. */}
       <directionalLight color="#b7c8ff" intensity={0.6} position={[10, 6, -12]} />

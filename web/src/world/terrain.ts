@@ -1,8 +1,11 @@
 /**
  * Pure terrain math shared by the terrain mesh and the astronauts' movement,
  * so feet always land on the rendered surface.
+ *
+ * The surface is a patch of a big planet: a gently rolling base area around
+ * the origin where the stations sit, rising into soft hills further out.
  */
-import { CHUNK, LANDING_PAD, STATIONS, type Vec3 } from './config';
+import { LANDING_PAD, STATIONS, SURFACE, type Vec3 } from './config';
 
 export function clamp(x: number, min: number, max: number): number {
   return x < min ? min : x > max ? max : x;
@@ -13,16 +16,39 @@ export function smoothstep(edge0: number, edge1: number, x: number): number {
   return t * t * (3 - 2 * t);
 }
 
-/** Irregular, soft outline of the chunk: radius as a function of angle. */
-export function outlineRadius(theta: number): number {
-  return (
-    CHUNK.radius *
-    (1 + 0.055 * Math.sin(3 * theta + 0.7) + 0.035 * Math.sin(5 * theta + 2.1) + 0.018 * Math.sin(9 * theta + 0.3))
-  );
+// ---------------------------------------------------------------------------
+// Value noise (deterministic, no dependencies)
+// ---------------------------------------------------------------------------
+
+function hash2(ix: number, iz: number): number {
+  let h = Math.imul(ix, 374761393) + Math.imul(iz, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
 }
 
-/** Height at which the top surface meets the strata (the rounded lip). */
-export const RIM_DROP = 0.6;
+/** Smooth 2D value noise in [0, 1]. */
+function valueNoise(x: number, z: number): number {
+  const ix = Math.floor(x);
+  const iz = Math.floor(z);
+  const fx = x - ix;
+  const fz = z - iz;
+  const ux = fx * fx * (3 - 2 * fx);
+  const uz = fz * fz * (3 - 2 * fz);
+  const a = hash2(ix, iz);
+  const b = hash2(ix + 1, iz);
+  const c = hash2(ix, iz + 1);
+  const d = hash2(ix + 1, iz + 1);
+  return a + (b - a) * ux + (c - a) * uz + (a - b - c + d) * ux * uz;
+}
+
+/** Two octaves of noise, roughly in [-1, 1]. */
+function fbm(x: number, z: number): number {
+  return (valueNoise(x, z) - 0.5) * 1.4 + (valueNoise(x * 2.1 + 17, z * 2.1 - 9) - 0.5) * 0.6;
+}
+
+// ---------------------------------------------------------------------------
+// Height field
+// ---------------------------------------------------------------------------
 
 interface FlatZone {
   x: number;
@@ -32,22 +58,17 @@ interface FlatZone {
 
 // Ground under stations and the pad is flattened so machines sit level.
 const FLAT_ZONES: FlatZone[] = [
-  ...Object.values(STATIONS).map((s) => ({ x: s.position[0], z: s.position[2], radius: s.footprint + 0.9 })),
-  { x: LANDING_PAD.position[0], z: LANDING_PAD.position[2], radius: LANDING_PAD.radius + 0.6 },
+  ...Object.values(STATIONS).map((s) => ({ x: s.position[0], z: s.position[2], radius: s.footprint + 1.2 })),
+  { x: LANDING_PAD.position[0], z: LANDING_PAD.position[2], radius: LANDING_PAD.radius + 0.8 },
 ];
-
-/** Normalized distance from center: 0 at the middle, 1 at the outline. */
-export function radialT(x: number, z: number): number {
-  const r = Math.hypot(x, z);
-  if (r === 0) return 0;
-  return r / outlineRadius(Math.atan2(z, x));
-}
 
 /** Shallow craters with a soft raised rim, in open ground. */
 export const CRATERS: { x: number; z: number; radius: number; depth: number }[] = [
-  { x: 3.5, z: 3.2, radius: 1.05, depth: 0.2 },
-  { x: -3.8, z: 1.5, radius: 0.75, depth: 0.15 },
-  { x: 1.8, z: -3.6, radius: 0.85, depth: 0.17 },
+  { x: 6.5, z: 5.5, radius: 1.5, depth: 0.25 },
+  { x: -8, z: 3.5, radius: 1.1, depth: 0.2 },
+  { x: 3.5, z: -8, radius: 1.2, depth: 0.22 },
+  { x: 11, z: 3, radius: 0.9, depth: 0.18 },
+  { x: -3, z: 12, radius: 1.3, depth: 0.22 },
 ];
 
 /** 0..1: how much (x, z) is inside a crater bowl (for tinting). */
@@ -72,26 +93,28 @@ function craterOffset(x: number, z: number): number {
   return offset;
 }
 
-/** Gentle rolling bumps, flattened under machines and faded near the rim. */
-export function terrainHeight(x: number, z: number): number {
-  let bumps =
-    0.24 * Math.sin(0.55 * x + 0.4) * Math.cos(0.5 * z - 0.8) +
-    0.12 * Math.sin(0.9 * x + 1.1 * z + 1.3) +
-    0.06 * Math.cos(1.6 * z - 0.7 * x + 0.5);
+/** 0 in the base area, rising to 1 out in the hills. */
+export function hillAmount(x: number, z: number): number {
+  const r = Math.hypot(x, z);
+  // Wobble the edge of the base so it isn't a perfect circle.
+  const edge = SURFACE.baseRadius + fbm(x * 0.08 + 40, z * 0.08) * 3;
+  return smoothstep(edge, edge + 7, r);
+}
 
+/** Terrain height at (x, z). */
+export function terrainHeight(x: number, z: number): number {
+  // Small rolling bumps plus fine roughness that makes the low-poly facets read.
+  let bumps = fbm(x * 0.2, z * 0.2) * 0.45 + fbm(x * 0.9 + 11, z * 0.9 - 3) * 0.14;
   for (const zone of FLAT_ZONES) {
     const d = Math.hypot(x - zone.x, z - zone.z);
     bumps *= smoothstep(zone.radius * 0.75, zone.radius * 1.4, d);
   }
 
-  const t = radialT(x, z);
-  bumps *= 1 - smoothstep(0.72, 0.94, t);
+  // Big soft hills beyond the base.
+  const hills = hillAmount(x, z);
+  const hillShape = (fbm(x * 0.05, z * 0.05) * 0.8 + 0.75) * SURFACE.hillHeight + fbm(x * 0.14 + 5, z * 0.14) * 1.6;
 
-  // Rounded lip: a quarter-circle profile over the outer ~18% of the radius.
-  const s = clamp((t - 0.82) / 0.18, 0, 1);
-  const drop = RIM_DROP * (1 - Math.sqrt(1 - s * s));
-
-  return bumps + craterOffset(x, z) - drop;
+  return bumps + craterOffset(x, z) + hills * Math.max(0, hillShape);
 }
 
 /** Point on the terrain surface above (x, z). */
@@ -101,9 +124,7 @@ export function surfacePoint(x: number, z: number): Vec3 {
 
 /** True if (x, z) is somewhere astronauts may walk. */
 export function isWalkable(x: number, z: number): boolean {
-  const theta = Math.atan2(z, x);
-  const limit = (CHUNK.walkRadius * outlineRadius(theta)) / CHUNK.radius;
-  return Math.hypot(x, z) <= limit;
+  return Math.hypot(x, z) <= SURFACE.walkRadius;
 }
 
 /** Height astronauts stand at: the terrain, plus the deck when on the landing pad. */

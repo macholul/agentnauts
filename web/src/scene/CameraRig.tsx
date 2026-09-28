@@ -5,7 +5,7 @@ import { Spherical, Vector3, type PerspectiveCamera } from 'three';
 import { CAMERA } from '../world/config';
 
 /** Horizontal extent (world units) that should always fit on screen. */
-const FIT_WIDTH = 23;
+const FIT_WIDTH = 34;
 
 /** Camera distance needed to fit FIT_WIDTH horizontally at this aspect. */
 function fitDistance(aspect: number, fovDeg: number): number {
@@ -17,7 +17,7 @@ function fitDistance(aspect: number, fovDeg: number): number {
 /**
  * Fixed isometric-ish view with a little freedom: small orbit range, clamped
  * zoom, no panning. On narrow screens the camera backs off to keep the whole
- * chunk visible.
+ * base area visible.
  */
 export function CameraRig() {
   const camera = useThree((s) => s.camera) as PerspectiveCamera;

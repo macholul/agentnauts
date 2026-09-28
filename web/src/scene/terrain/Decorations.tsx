@@ -7,8 +7,8 @@ import { terrainHeight } from '../../world/terrain';
 function Rock({ config }: { config: DecorationConfig }) {
   return (
     <mesh scale={[config.scale * 1.1, config.scale * 0.82, config.scale]} position-y={config.scale * 0.42} castShadow receiveShadow>
-      <icosahedronGeometry args={[1, 2]} />
-      <meshStandardMaterial color={config.color} roughness={1} />
+      <icosahedronGeometry args={[1, 1]} />
+      <meshStandardMaterial color={config.color} roughness={1} flatShading />
     </mesh>
   );
 }

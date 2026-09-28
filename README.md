@@ -1,7 +1,7 @@
 # groundcrew
 
 A cartoon 3D visualizer for AI coding agents. Every Claude Code session becomes a
-little astronaut working on a floating chunk of alien planet: it walks to the
+little astronaut working on a base on an alien planet, seen from above: it walks to the
 **fabricator** to edit files, the **scanner** to read and search, the **drill**
 to run shell commands and the **radar dish** to search the web. When the agent
 needs you, its astronaut waits on the landing pad with a big **!** over its head.
@@ -144,7 +144,7 @@ curl -s -X POST -H 'Content-Type: application/json' \
 | `WebSearch`, `WebFetch`                      | **radar dish** (pink)                                           |
 | `Notification` (permission / input needed)   | goes to the **landing pad**, shows a floating **!**             |
 | `Stop`, unknown tools (MCP, `Task`, …)       | idle                                                            |
-| no events for ~8 s                           | wanders around the chunk, pauses, looks around                  |
+| no events for ~8 s                           | wanders around the base, pauses, looks around                   |
 | tool call inside a subagent (`agent_id`)     | a smaller **crew** astronaut drops in and does it               |
 | `SubagentStop`                               | that crew astronaut jetpacks away                               |
 
