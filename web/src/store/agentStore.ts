@@ -183,11 +183,22 @@ function createAgent(agents: Agents, options: SpawnOptions): Agent {
     name = siblings.length > 0 ? `${base} ${siblings.length + 1}` : base;
   }
 
-  // Commanders touch down on the pad; crew land around it.
-  const landingSpot =
-    role === 'commander'
-      ? randomPointNear(LANDING_PAD.position, 0, 0.6)
-      : randomPointNear(LANDING_PAD.position, LANDING_PAD.radius + 0.5, LANDING_PAD.radius + 2);
+  // Commanders touch down on the pad; crew land around it. Pick the
+  // candidate spot farthest from everyone else so nobody lands on a head.
+  const others = Object.values(agents).map((a) => a.position);
+  let landingSpot: Vec3 = LANDING_PAD.position;
+  let bestClearance = -1;
+  for (let i = 0; i < 8; i++) {
+    const candidate =
+      role === 'commander'
+        ? randomPointNear(LANDING_PAD.position, 0, LANDING_PAD.radius - 0.45)
+        : randomPointNear(LANDING_PAD.position, LANDING_PAD.radius + 0.5, LANDING_PAD.radius + 2.2);
+    const clearance = Math.min(Infinity, ...others.map((p) => Math.hypot(p[0] - candidate[0], p[2] - candidate[2])));
+    if (clearance > bestClearance) {
+      bestClearance = clearance;
+      landingSpot = candidate;
+    }
+  }
 
   return {
     id,

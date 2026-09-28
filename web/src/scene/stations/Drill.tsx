@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { RoundedBox } from '@react-three/drei';
 import { Quaternion, Vector3, type Group, type MeshStandardMaterial } from 'three';
 import { PALETTE } from '../../world/config';
+import { Particles } from '../effects/Particles';
 import { AccentMaterial, BodyMaterial, Button, DarkMaterial, Foundation, type StationVisualProps } from './parts';
 
 const APEX = new Vector3(0, 2.0, 0);
@@ -119,6 +120,37 @@ export function Drill({ accent, activity }: StationVisualProps) {
         </mesh>
         <Button position={[0.38, 0.28, 0.72]} color="#ff5d6c" />
       </group>
+
+      {/* Dust kicked up at the bore hole */}
+      <Particles
+        activity={activity}
+        color="#f2c2a6"
+        origin={[0, 0.42, 0]}
+        spread={0.15}
+        velocity={[0, 0.9, 0]}
+        jitter={1.0}
+        gravity={-0.8}
+        lifetime={1.1}
+        size={0.11}
+        rate={16}
+        count={24}
+        grow
+      />
+      {/* Exhaust puffs */}
+      <Particles
+        activity={activity}
+        color="#d9cfe8"
+        origin={[-0.52, 1.02, -0.5]}
+        spread={0.03}
+        velocity={[0, 0.8, -0.1]}
+        jitter={0.15}
+        gravity={0.2}
+        lifetime={1.4}
+        size={0.09}
+        rate={5}
+        count={10}
+        grow
+      />
     </group>
   );
 }

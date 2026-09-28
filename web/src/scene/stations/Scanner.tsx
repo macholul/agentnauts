@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { RoundedBox } from '@react-three/drei';
 import { AdditiveBlending, type Group, type Mesh, type MeshBasicMaterial, type MeshStandardMaterial } from 'three';
 import { PALETTE } from '../../world/config';
+import { Particles } from '../effects/Particles';
 import { AccentMaterial, BodyMaterial, Button, DarkMaterial, Foundation, type StationVisualProps } from './parts';
 
 /**
@@ -122,6 +123,22 @@ export function Scanner({ accent, activity }: StationVisualProps) {
         </RoundedBox>
         <Button position={[0, 0.25, 0.17]} color="#ffd166" />
       </group>
+
+      {/* Data bits drifting up out of the scan */}
+      <Particles
+        activity={activity}
+        color={accent}
+        origin={[0, 0.75, 0]}
+        spread={0.35}
+        velocity={[0, 0.55, 0]}
+        jitter={0.25}
+        gravity={0.3}
+        lifetime={1.3}
+        size={0.032}
+        rate={18}
+        count={30}
+        glow
+      />
     </group>
   );
 }

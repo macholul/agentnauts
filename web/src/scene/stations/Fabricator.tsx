@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { RoundedBox } from '@react-three/drei';
 import type { Group, Mesh, MeshStandardMaterial } from 'three';
 import { PALETTE } from '../../world/config';
+import { Particles } from '../effects/Particles';
 import { AccentMaterial, Antenna, BodyMaterial, Button, DarkMaterial, Foundation, type StationVisualProps } from './parts';
 
 /**
@@ -113,6 +114,22 @@ export function Fabricator({ accent, activity }: StationVisualProps) {
         <AccentMaterial color={accent} />
       </RoundedBox>
       <Antenna position={[-0.7, 0.7, -0.45]} height={0.55} color={accent} />
+
+      {/* Sparks while printing */}
+      <Particles
+        activity={activity}
+        color="#ffd27a"
+        origin={[0, 1.05, -0.05]}
+        spread={0.35}
+        velocity={[0, 1.4, 0]}
+        jitter={1.1}
+        gravity={-5}
+        lifetime={0.55}
+        size={0.035}
+        rate={45}
+        count={50}
+        glow
+      />
     </group>
   );
 }
