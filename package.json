@@ -1,0 +1,21 @@
+{
+  "name": "groundcrew",
+  "private": true,
+  "version": "0.1.0",
+  "description": "A cartoon 3D visualizer for AI coding agents: little astronauts working on a floating chunk of alien planet.",
+  "type": "module",
+  "workspaces": [
+    "shared",
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w web",
+    "server": "npm run dev -w server",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20.19"
+  }
+}

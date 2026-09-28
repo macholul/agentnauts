@@ -1,0 +1,14 @@
+{
+  "name": "@groundcrew/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Event and intent types shared by the groundcrew web app and event server.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "build": "tsc -p ."
+  }
+}
