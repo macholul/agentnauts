@@ -3,7 +3,7 @@
  * simulator toggle. The sources themselves live in sourceManager.ts.
  */
 import { create } from 'zustand';
-import { cleanName, isValidRoomCode } from '@groundcrew/shared';
+import { cleanName, isValidRoomCode, keyFingerprint, normalizeRoomCode } from '@groundcrew/shared';
 import type { SourceState } from './types';
 
 export interface SourceInfo {
@@ -39,8 +39,8 @@ function writeStorage(key: string, value: string | null): void {
 
 /** A `?room=` link wins over the remembered room. */
 function readRoomPreference(): string | null {
-  const fromUrl = new URLSearchParams(window.location.search).get('room');
-  if (fromUrl && isValidRoomCode(fromUrl)) return fromUrl;
+  const fromUrl = normalizeRoomCode(new URLSearchParams(window.location.search).get('room') ?? '');
+  if (isValidRoomCode(fromUrl)) return fromUrl;
   const stored = readStorage(ROOM_KEY);
   return stored && isValidRoomCode(stored) ? stored : null;
 }
@@ -49,9 +49,24 @@ function readRoomPreference(): string | null {
 export interface BridgeIdentity {
   /** Bridge was built with a Supabase project configured. */
   cloud: boolean;
+  /** Room the bridge is sharing to right now. */
   room?: string;
   name?: string;
   shareDetails?: boolean;
+  /** Room remembered from before a restart, not shared until you resume it. */
+  resumable?: { room: string; name: string; shareDetails: boolean };
+  /** Bridge's public key: your identity in rooms. */
+  identity?: string;
+}
+
+/** Someone whose signed events we've verified in this room. */
+export interface RoomPerson {
+  /** Public key (base64url). */
+  key: string;
+  /** Short ID people can compare, e.g. "a3f9-c21e". */
+  fingerprint: string;
+  name: string;
+  lastSeen: number;
 }
 
 /** Someone else in the room, from Supabase presence. */
@@ -87,10 +102,21 @@ interface SourceStoreState {
   roommates: Roommate[];
   /** Also share file names / commands / queries with the room. */
   shareDetails: boolean;
+  /**
+   * You said "share my agents" in this page session. Never persisted, so
+   * sharing only ever resumes after a restart when you confirm it.
+   */
+  sharingWanted: boolean;
+  /** People whose agents we've seen in the room (signature-verified). */
+  roomPeople: Record<string, RoomPerson>;
   /** What the local bridge reported in its hello message. */
   bridgeIdentity: BridgeIdentity | null;
-  joinRoom: (room: string, name: string) => void;
+  /** Join a room and share your agents there. */
+  joinRoom: (room: string, name: string, shareDetails?: boolean) => void;
   leaveRoom: () => void;
+  /** Share (true) or stop sharing (false) your agents in the current room. */
+  setSharing: (share: boolean) => void;
+  notePerson: (key: string, name: string, at: number) => void;
   setShareDetails: (share: boolean) => void;
   setRoommates: (roommates: Roommate[]) => void;
   setBridgeIdentity: (identity: BridgeIdentity) => void;
@@ -103,20 +129,39 @@ export const useSourceStore = create<SourceStoreState>()((set) => ({
   name: cleanName(readStorage(NAME_KEY) ?? ''),
   roommates: [],
   shareDetails: readStorage(DETAILS_KEY) === 'on',
+  sharingWanted: false,
+  roomPeople: {},
   bridgeIdentity: null,
 
-  joinRoom: (room, name) => {
-    if (!isValidRoomCode(room)) return;
+  joinRoom: (room, name, shareDetails) => {
+    const code = normalizeRoomCode(room);
+    if (!isValidRoomCode(code)) return;
     const clean = cleanName(name);
-    writeStorage(ROOM_KEY, room);
+    writeStorage(ROOM_KEY, code);
     writeStorage(NAME_KEY, clean);
-    set({ room, name: clean });
+    if (shareDetails !== undefined) writeStorage(DETAILS_KEY, shareDetails ? 'on' : 'off');
+    set((s) => ({
+      room: code,
+      name: clean,
+      sharingWanted: true,
+      ...(shareDetails !== undefined ? { shareDetails } : {}),
+      ...(code !== s.room ? { roomPeople: {} } : {}),
+    }));
   },
 
   leaveRoom: () => {
     writeStorage(ROOM_KEY, null);
-    set({ room: null, roommates: [] });
+    set({ room: null, roommates: [], roomPeople: {}, sharingWanted: false });
   },
+
+  setSharing: (share) => set({ sharingWanted: share }),
+
+  notePerson: (key, name, at) =>
+    set((s) => {
+      const prev = s.roomPeople[key];
+      if (prev && prev.name === name && at - prev.lastSeen < 5000) return s;
+      return { roomPeople: { ...s.roomPeople, [key]: { key, fingerprint: keyFingerprint(key), name, lastSeen: at } } };
+    }),
 
   setShareDetails: (share) => {
     writeStorage(DETAILS_KEY, share ? 'on' : 'off');
@@ -127,13 +172,25 @@ export const useSourceStore = create<SourceStoreState>()((set) => ({
 
   setBridgeIdentity: (identity) =>
     set((s) => {
-      const first = s.bridgeIdentity === null;
-      // On first contact, adopt the room the bridge remembers if the browser has none.
-      const adopt = first && !s.room && identity.room && identity.name;
+      // If the bridge is already sharing (you confirmed earlier and it kept
+      // running), show that room here. A merely remembered room is NOT
+      // adopted: the panel asks you first.
+      const sharingNow = s.bridgeIdentity === null && identity.room && identity.name;
+      // The bridge was sharing and now reports it isn't: it restarted. Even
+      // with this page still open, sharing again needs a fresh "yes".
+      const restarted = Boolean(s.bridgeIdentity?.room) && !identity.room;
       return {
         bridgeIdentity: identity,
-        ...(adopt ? { room: identity.room!, name: identity.name!, shareDetails: identity.shareDetails ?? false } : {}),
-        name: s.name || identity.name || '',
+        ...(restarted ? { sharingWanted: false } : {}),
+        ...(sharingNow
+          ? {
+              room: identity.room!,
+              name: identity.name!,
+              shareDetails: identity.shareDetails ?? false,
+              sharingWanted: true,
+            }
+          : {}),
+        name: s.name || identity.name || identity.resumable?.name || '',
       };
     }),
 

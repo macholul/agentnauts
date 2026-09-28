@@ -1,11 +1,22 @@
 /**
  * Multiplayer: watch a shared room on Supabase Realtime. Every person's
- * bridge publishes their agents' events to the room (see server/src/room.ts);
- * this source receives them and feeds them into the store like any other
- * source, so the scene doesn't know or care that they're remote.
+ * bridge publishes their agents' events to the room, signed with that
+ * person's key (see server/src/room.ts). This source verifies each signature
+ * and feeds genuine events into the store like any other source, so the
+ * scene doesn't know or care that they're remote.
  */
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
-import { ROOM_EVENT, makeId, parseRoomMessage, resolveCloud, roomTopic, type AgentEvent } from '@groundcrew/shared';
+import {
+  ROOM_EVENT,
+  canVerifySignatures,
+  keyFingerprint,
+  makeId,
+  parseRoomEnvelope,
+  resolveCloud,
+  roomTopic,
+  verifyRoomEnvelope,
+  type AgentEvent,
+} from '@groundcrew/shared';
 import { useSourceStore, type Roommate } from './sourceStore';
 import { StatusEmitter, type AgentEventSource, type EventSink, type SourceStatus } from './types';
 
@@ -26,14 +37,32 @@ function getClient(settings: SupabaseSettings): SupabaseClient {
   return client;
 }
 
-/** Keep each person's sessions apart, and label them with who they belong to. */
-export function namespaceEvent(owner: string, event: AgentEvent): AgentEvent {
+/**
+ * Keep each person's sessions apart by their verified key (never just their
+ * name), and label them with who they belong to.
+ */
+export function namespaceEvent(owner: string, key: string, event: AgentEvent, nameTaken: boolean): AgentEvent {
   const project = event.sessionName ?? 'agent';
+  const who = nameTaken ? `${owner} (${keyFingerprint(key)})` : owner;
   return {
     ...event,
-    sessionId: `room:${owner}:${event.sessionId}`,
-    sessionName: `${owner} · ${project}`,
+    sessionId: `room:${key}:${event.sessionId}`,
+    sessionName: `${who} · ${project}`,
   };
+}
+
+/** Remembers recent event ids so a re-broadcast (replayed) message is ignored. */
+class RecentIds {
+  private ids = new Set<string>();
+  seen(id: string): boolean {
+    if (this.ids.has(id)) return true;
+    this.ids.add(id);
+    if (this.ids.size > 2000) {
+      const first = this.ids.values().next().value;
+      if (first !== undefined) this.ids.delete(first);
+    }
+    return false;
+  }
 }
 
 export class RoomSource implements AgentEventSource {
@@ -42,6 +71,10 @@ export class RoomSource implements AgentEventSource {
   private status = new StatusEmitter();
   private channel: RealtimeChannel | null = null;
   private readonly presenceKey = makeId('viewer');
+  private readonly recent = new RecentIds();
+  /** Which key first used each display name in this room. */
+  private readonly nameOwners = new Map<string, string>();
+  private rejected = 0;
 
   constructor(
     private readonly settings: SupabaseSettings,
@@ -57,6 +90,13 @@ export class RoomSource implements AgentEventSource {
 
   start(sink: EventSink): void {
     if (this.channel) return;
+    if (!canVerifySignatures()) {
+      this.status.set({
+        state: 'error',
+        detail: 'This page cannot check signatures here. Open it via localhost or https.',
+      });
+      return;
+    }
     this.status.set({ state: 'connecting', detail: `Joining room ${this.room}` });
     const supabase = getClient(this.settings);
     const channel = supabase.channel(roomTopic(this.room), {
@@ -65,16 +105,7 @@ export class RoomSource implements AgentEventSource {
     this.channel = channel;
 
     channel.on('broadcast', { event: ROOM_EVENT }, ({ payload }) => {
-      const message = parseRoomMessage(payload);
-      if (!message) {
-        console.warn('[room] ignoring malformed message', payload);
-        return;
-      }
-      // Your own agents already arrive through your local bridge.
-      const sources = useSourceStore.getState();
-      const ownBridge = sources.bridgeIdentity?.name;
-      if (ownBridge && message.owner === ownBridge && sources.sources.bridge?.state === 'connected') return;
-      sink(namespaceEvent(message.owner, message.event));
+      void this.receive(payload, sink);
     });
 
     channel.on('presence', { event: 'sync' }, () => {
@@ -108,5 +139,34 @@ export class RoomSource implements AgentEventSource {
     if (channel && client) void client.removeChannel(channel);
     useSourceStore.getState().setRoommates([]);
     this.status.set({ state: 'stopped' });
+  }
+
+  private async receive(payload: unknown, sink: EventSink): Promise<void> {
+    const envelope = parseRoomEnvelope(payload);
+    const content = envelope ? await verifyRoomEnvelope(envelope, this.room) : null;
+    if (!content) {
+      // Unsigned, forged, tampered, or meant for another room.
+      this.rejected++;
+      if (this.rejected === 1 || this.rejected % 100 === 0) {
+        console.warn(`[room] dropped ${this.rejected} message(s) that failed signature checks`);
+      }
+      return;
+    }
+    if (this.channel === null || this.recent.seen(`${content.key}:${content.event.id}`)) return;
+
+    const store = useSourceStore.getState();
+    store.notePerson(content.key, content.owner, Date.now());
+
+    // Your own agents already arrive through your local bridge.
+    const ownKey = store.bridgeIdentity?.identity;
+    if (ownKey && content.key === ownKey && store.sources.bridge?.state === 'connected') return;
+
+    // Names are just labels: whoever used a name first keeps it (you, for your
+    // own name); anyone else using it is shown with their ID.
+    const ownName = store.bridgeIdentity?.name;
+    if (ownKey && ownName && !this.nameOwners.has(ownName)) this.nameOwners.set(ownName, ownKey);
+    if (!this.nameOwners.has(content.owner)) this.nameOwners.set(content.owner, content.key);
+    const nameTaken = this.nameOwners.get(content.owner) !== content.key;
+    sink(namespaceEvent(content.owner, content.key, content.event, nameTaken));
   }
 }

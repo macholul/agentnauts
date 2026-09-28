@@ -107,12 +107,14 @@ export class BridgeSource implements AgentEventSource {
         return;
       }
       if (parsed.type === 'hello') {
-        const { cloud, room, name, shareDetails } = parsed;
+        const { cloud, room, name, shareDetails, resumable, identity } = parsed;
         useSourceStore.getState().setBridgeIdentity({
           cloud: cloud ?? false,
           ...(room ? { room } : {}),
           ...(name ? { name } : {}),
           ...(shareDetails !== undefined ? { shareDetails } : {}),
+          ...(resumable ? { resumable } : {}),
+          ...(identity ? { identity } : {}),
         });
       }
       if (parsed.type === 'event') this.sink?.(parsed.event);

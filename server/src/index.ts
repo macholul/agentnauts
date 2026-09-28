@@ -12,6 +12,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { BRIDGE_WS_PATH, DEFAULT_BRIDGE_PORT, type AgentEvent, type ServerMessage } from '@groundcrew/shared';
 import { normalizeHookPayload } from './normalize';
 import { isAllowedOrigin } from './origin';
+import { loadOrCreateIdentity } from './identity';
 import { RoomManager, parseRoomSettings } from './room';
 
 // Optional settings file next to package.json (see .env.example).
@@ -38,7 +39,7 @@ function log(...args: unknown[]): void {
 }
 
 // Multiplayer room this bridge shares to (chosen in the web app, remembered on disk).
-const rooms = new RoomManager({ env: process.env, log });
+const rooms = new RoomManager({ env: process.env, identity: loadOrCreateIdentity(), log });
 
 function preview(text: string, max = 300): string {
   const flat = text.replace(/\s+/g, ' ');
@@ -106,7 +107,9 @@ function helloMessage(): ServerMessage {
     server: 'groundcrew',
     version: VERSION,
     cloud: rooms.cloud !== null,
+    ...(rooms.cloud ? { identity: rooms.identity.publicKey } : {}),
     ...(room ? { room: room.room, name: room.name, shareDetails: room.shareDetails } : {}),
+    ...(rooms.resumable ? { resumable: rooms.resumable } : {}),
   };
 }
 
@@ -293,9 +296,11 @@ server.listen(PORT, HOST, () => {
   const room = rooms.current;
   if (room) {
     console.log(
-      `[groundcrew]   room   → sharing as "${room.name}" in room "${room.room}"` +
-        (room.shareDetails ? ' (with file names and commands)' : ' (tool names only)'),
+      `[groundcrew]   room   → SHARING as "${room.name}" in room "${room.room}"` +
+        (room.shareDetails ? ' (with project names, files and commands)' : ' (tool names only)'),
     );
+  } else if (rooms.resumable) {
+    console.log(`[groundcrew]   room   → not sharing; open the web app to resume room "${rooms.resumable.room}"`);
   } else if (!rooms.cloud) {
     console.log('[groundcrew]   room   → multiplayer not configured (see shared/src/cloud.ts)');
   }

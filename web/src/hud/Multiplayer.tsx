@@ -1,16 +1,10 @@
 import { useState } from 'react';
-import { isValidRoomCode } from '@groundcrew/shared';
+import { generateRoomCode, isValidRoomCode, keyFingerprint, normalizeRoomCode } from '@groundcrew/shared';
+import { setBridgeRoom } from '../sources/bridge';
 import { supabaseSettings } from '../sources/room';
 import { useSourceStore } from '../sources/sourceStore';
 
-/** Readable random room code, long enough to be hard to guess. */
-function newRoomCode(): string {
-  const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
-  const values = new Uint32Array(12);
-  window.crypto.getRandomValues(values);
-  const chars = Array.from(values, (v) => alphabet[v % alphabet.length]).join('');
-  return `crew-${chars.slice(0, 4)}-${chars.slice(4, 8)}-${chars.slice(8)}`;
-}
+const newRoomCode = () => generateRoomCode((n) => window.crypto.getRandomValues(new Uint32Array(n)));
 
 function shareLink(room: string): string {
   const url = new URL(window.location.href);
@@ -18,18 +12,27 @@ function shareLink(room: string): string {
   return url.toString();
 }
 
-/** HUD section: join or leave a shared room and see who else is watching. */
+/** Short, readable ID chip for a public key. */
+function IdChip({ publicKey, title }: { publicKey: string; title?: string }) {
+  return (
+    <span className="hud-id" title={title ?? 'Verified ID: only this person can send events with it'}>
+      ✓ {keyFingerprint(publicKey)}
+    </span>
+  );
+}
+
+/** HUD section: join or leave a shared room, control sharing, see who's here. */
 export function Multiplayer() {
   const room = useSourceStore((s) => s.room);
   const name = useSourceStore((s) => s.name);
   const roommates = useSourceStore((s) => s.roommates);
-  const bridgeIdentity = useSourceStore((s) => s.bridgeIdentity);
+  const people = useSourceStore((s) => s.roomPeople);
+  const bridge = useSourceStore((s) => s.bridgeIdentity);
   const bridgeConnected = useSourceStore((s) => s.sources.bridge?.state === 'connected');
-  const shareDetails = useSourceStore((s) => s.shareDetails);
-  const setShareDetails = useSourceStore((s) => s.setShareDetails);
   const status = useSourceStore((s) => s.sources.room);
-  const joinRoom = useSourceStore((s) => s.joinRoom);
-  const leaveRoom = useSourceStore((s) => s.leaveRoom);
+  const shareDetails = useSourceStore((s) => s.shareDetails);
+  const sharingWanted = useSourceStore((s) => s.sharingWanted);
+  const { joinRoom, leaveRoom, setShareDetails, setSharing } = useSourceStore.getState();
   const [draftRoom, setDraftRoom] = useState('');
   const [draftName, setDraftName] = useState(name);
   const [copied, setCopied] = useState(false);
@@ -43,17 +46,41 @@ export function Multiplayer() {
     );
   }
 
+  const canShare = bridgeConnected && Boolean(bridge?.cloud);
+  const sharing = canShare && Boolean(room) && bridge?.room === room;
+  const resumable = canShare && !bridge?.room ? bridge?.resumable : undefined;
+
+  // Remembered room from before a restart: ask before sharing again.
+  const resumePrompt = resumable && (
+    <div className="hud-note hud-note--ask">
+      <div>
+        Before the restart you shared your agents in <b className="hud-room-code">{resumable.room}</b> as{' '}
+        <b>{resumable.name}</b>. Share again?
+      </div>
+      <div className="hud-form__row">
+        <button className="hud-button" onClick={() => joinRoom(resumable.room, resumable.name, resumable.shareDetails)}>
+          Resume sharing
+        </button>
+        <button className="hud-button hud-button--ghost" onClick={() => void setBridgeRoom(null)}>
+          Forget it
+        </button>
+      </div>
+    </div>
+  );
+
   if (!room) {
-    const roomOk = isValidRoomCode(draftRoom);
+    const code = normalizeRoomCode(draftRoom);
+    const roomOk = isValidRoomCode(code);
     const nameOk = draftName.trim().length > 0;
     return (
       <section className="hud-section">
         <div className="hud-section__title">Multiplayer</div>
+        {resumePrompt}
         <form
           className="hud-form"
           onSubmit={(e) => {
             e.preventDefault();
-            if (roomOk && nameOk) joinRoom(draftRoom.trim(), draftName);
+            if (roomOk && nameOk) joinRoom(code, draftName);
           }}
         >
           <input
@@ -65,25 +92,33 @@ export function Multiplayer() {
           />
           <div className="hud-form__row">
             <input
-              className="hud-input"
-              placeholder="Room code"
+              className="hud-input hud-room-code"
+              placeholder="crew-xxxx-xxxx-xxxx"
               value={draftRoom}
-              maxLength={48}
-              onChange={(e) => setDraftRoom(e.target.value.trim())}
+              maxLength={24}
+              onChange={(e) => setDraftRoom(e.target.value)}
             />
             <button type="button" className="hud-button hud-button--ghost" onClick={() => setDraftRoom(newRoomCode())}>
               New
             </button>
           </div>
+          {draftRoom && !roomOk && <div className="hud-small hud-muted">Room codes look like crew-xxxx-xxxx-xxxx. Use New or paste one.</div>}
           <button type="submit" className="hud-button" disabled={!roomOk || !nameOk}>
             Join room
           </button>
         </form>
+        {bridge?.identity && (
+          <div className="hud-small hud-muted hud-your-id">
+            Your ID <IdChip publicKey={bridge.identity} title="Tell teammates this ID so they know it's really you" />
+          </div>
+        )}
       </section>
     );
   }
 
-  const sharing = bridgeConnected && bridgeIdentity?.room === room;
+  const others = Object.values(people).filter((p) => p.key !== bridge?.identity);
+  const watchers = [...new Set(roommates.map((r) => r.name))];
+
   return (
     <section className="hud-section">
       <div className="hud-section__title">Multiplayer</div>
@@ -105,26 +140,52 @@ export function Multiplayer() {
           Leave
         </button>
       </div>
-      <div className="hud-muted hud-small">
-        {roommates.length === 0
-          ? 'Nobody else here yet.'
-          : `Also watching: ${[...new Set(roommates.map((r) => r.name))].join(', ')}`}
-      </div>
+      {status?.state === 'error' && <div className="hud-note">{status.detail}</div>}
+
       {sharing ? (
         <>
-          <div className="hud-small hud-sharing">Sharing your agents as {bridgeIdentity?.name}</div>
+          <div className="hud-small hud-sharing">
+            Sharing your agents as {bridge?.name} {bridge?.identity && <IdChip publicKey={bridge.identity} />}
+          </div>
           <label className="hud-check hud-small">
             <input type="checkbox" checked={shareDetails} onChange={(e) => setShareDetails(e.target.checked)} />
-            Also share file names &amp; commands
+            Also share project names, files &amp; commands
           </label>
+          <button className="hud-action hud-small" onClick={() => setSharing(false)}>
+            Stop sharing (keep watching)
+          </button>
         </>
       ) : (
-        <div className="hud-note">
-          {bridgeConnected
-            ? 'Watching only: your bridge is pinned to another room.'
-            : 'Watching only. Run the bridge (npm run dev) to share your own agents too.'}
-        </div>
+        resumePrompt || (
+          <div className="hud-note">
+            {!canShare
+              ? 'Watching only. Run the bridge (npm run dev) to share your own agents too.'
+              : sharingWanted
+                ? 'Starting to share…'
+                : (
+                  <>
+                    Watching only.{' '}
+                    <button className="hud-action" onClick={() => setSharing(true)}>
+                      Share my agents here
+                    </button>
+                  </>
+                )}
+          </div>
+        )
       )}
+
+      {others.length > 0 && (
+        <ul className="hud-people">
+          {others.map((p) => (
+            <li key={p.key}>
+              <b>{p.name}</b> <IdChip publicKey={p.key} />
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="hud-muted hud-small">
+        {watchers.length === 0 ? 'Nobody else is watching yet.' : `Watching: ${watchers.join(', ')}`}
+      </div>
     </section>
   );
 }

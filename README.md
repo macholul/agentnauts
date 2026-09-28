@@ -236,12 +236,31 @@ Forks can point at their own project with `SUPABASE_URL` /
 `SUPABASE_ANON_KEY` (bridge) and `VITE_SUPABASE_URL` /
 `VITE_SUPABASE_ANON_KEY` (web).
 
-**Privacy.** By default only tool names and states are shared (e.g. "Bash",
-"waiting"), never file names, commands or search queries; tick **Also share
-file names & commands** in the panel to include them. **The room code is the
-password**: anyone who knows it can watch, so use the long random codes from
-**New**. Free Supabase projects have fair-use limits (concurrent connections
-and messages per month) that are plenty for small teams.
+**Privacy and identity.**
+
+- *Nothing is shared until you join a room*, and a big "Sharing live" badge
+  stays at the top of the screen while you are. **Stop sharing** keeps you
+  watching without sending anything.
+- *Sharing never resumes on its own.* The bridge remembers your room, but after
+  a restart it waits until you click **Resume sharing** in the app.
+- *Minimal by default.* Only tool names and states are sent (e.g. "Edit",
+  "waiting"). Project folder names become "project 1", "project 2"; file
+  names, commands and search queries are dropped. Tick **Also share project
+  names, files & commands** to include them. Code, prompts and Claude's replies
+  are never sent.
+- *Rooms can't be guessed.* Only generated codes (`crew-xxxx-xxxx-xxxx`, about
+  59 bits of randomness) are accepted. The code is the room's password: anyone
+  who has it can watch, so share it like one.
+- *Nobody can pose as you.* Each bridge creates an Ed25519 key pair once
+  (`~/.groundcrew/identity.json`, readable only by you) and signs every event;
+  browsers drop anything with a bad signature, and signed messages can't be
+  replayed into another room. Your short ID (e.g. `✓ a3f9-c21e`) is shown in
+  the panel: tell teammates yours once, and they can tell the real you from
+  anyone else using your name. Names are just labels; if two people pick the
+  same one, the newcomer's astronauts show their ID.
+- *What's not protected:* anyone with the room code can still watch (and see
+  who's watching), and the shared Supabase project's free quota can be used by
+  anyone with the app. Sign-in based private rooms would fix both.
 
 ## Configuration
 

@@ -3,9 +3,14 @@
  * Supabase Realtime (broadcast). Everyone watching that room in the web app
  * sees your astronauts next to theirs.
  *
- * The room is normally chosen in the web app (which tells the bridge via
- * PUT /room) and remembered in ~/.groundcrew/room.json across restarts.
- * GROUNDCREW_ROOM / GROUNDCREW_NAME env vars still work as a fixed override.
+ * Privacy rules enforced here:
+ * - Nothing is shared until you join a room in the web app (PUT /room).
+ * - A remembered room is NOT resumed automatically after a restart; the web
+ *   app asks you first.
+ * - By default only tool names and states leave the machine: file names,
+ *   commands, queries and project folder names are replaced or removed.
+ * - Every message is signed with this machine's key, so nobody else can post
+ *   as you.
  *
  * Sending uses Realtime's REST broadcast (`channel.httpSend`), so the bridge
  * never holds a socket open to Supabase and nothing is stored in a database.
@@ -22,14 +27,16 @@ import {
   roomTopic,
   type AgentEvent,
   type CloudSettings,
-  type RoomMessage,
+  type RoomEnvelope,
+  type SignedRoomContent,
 } from '@groundcrew/shared';
+import type { Identity } from './identity';
 
 /** Which room this bridge shares to, and as whom. */
 export interface RoomSettings {
   room: string;
   name: string;
-  /** Include file names / commands / queries. Off by default for privacy. */
+  /** Include project names, file names, commands and queries. Off by default. */
   shareDetails: boolean;
 }
 
@@ -53,19 +60,49 @@ export function roomSettingsFromEnv(env: NodeJS.ProcessEnv): { settings: RoomSet
     shareDetails: env.GROUNDCREW_SHARE_DETAILS === '1',
   });
   if (!settings) {
-    return { settings: null, problem: 'GROUNDCREW_ROOM needs 6-48 letters/digits/dashes and GROUNDCREW_NAME must be set' };
+    return {
+      settings: null,
+      problem: 'GROUNDCREW_ROOM must be a generated code (crew-xxxx-xxxx-xxxx) and GROUNDCREW_NAME must be set',
+    };
   }
   return { settings };
 }
 
-/** What actually leaves the machine for one event. Pure, for testing. */
-export function toRoomMessage(event: AgentEvent, settings: Pick<RoomSettings, 'name' | 'shareDetails'>): RoomMessage {
-  const { detail, ...rest } = event;
-  return {
-    v: 1,
-    owner: settings.name,
-    event: settings.shareDetails && detail ? { ...rest, detail } : rest,
-  };
+/**
+ * Stable stand-ins for project folder names ("project 1", "project 2"...), so
+ * others can tell your sessions apart without learning what you work on.
+ */
+export class ProjectAliases {
+  private aliases = new Map<string, string>();
+
+  alias(project: string): string {
+    let alias = this.aliases.get(project);
+    if (!alias) {
+      alias = `project ${this.aliases.size + 1}`;
+      this.aliases.set(project, alias);
+    }
+    return alias;
+  }
+}
+
+/** What actually leaves the machine for one event (before signing). Pure, for testing. */
+export function toRoomContent(
+  event: AgentEvent,
+  settings: RoomSettings,
+  key: string,
+  aliases: ProjectAliases,
+): SignedRoomContent {
+  const { detail, sessionName, ...rest } = event;
+  const shared: AgentEvent = settings.shareDetails
+    ? { ...rest, ...(detail ? { detail } : {}), ...(sessionName ? { sessionName } : {}) }
+    : { ...rest, ...(sessionName ? { sessionName: aliases.alias(sessionName) } : {}) };
+  return { room: settings.room, owner: settings.name, key, event: shared };
+}
+
+/** Serialize and sign content into the wire envelope. */
+export function signRoomContent(content: SignedRoomContent, identity: Identity): RoomEnvelope {
+  const data = JSON.stringify(content);
+  return { v: 2, data, sig: identity.sign(data) };
 }
 
 export const ROOM_FILE = join(homedir(), '.groundcrew', 'room.json');
@@ -80,6 +117,7 @@ function loadSavedRoom(file: string): RoomSettings | null {
 
 export interface RoomManagerOptions {
   env: NodeJS.ProcessEnv;
+  identity: Identity;
   log: (...args: unknown[]) => void;
   /** Where the chosen room is remembered (tests pass a temp path). */
   file?: string;
@@ -91,9 +129,14 @@ export interface RoomManagerOptions {
  */
 export class RoomManager {
   readonly cloud: CloudSettings | null;
+  readonly identity: Identity;
   /** Set when env vars pin the room; the web app can't change it then. */
   readonly pinned: boolean;
-  private settings: RoomSettings | null;
+  /** Room we're sharing to right now. */
+  private active: RoomSettings | null;
+  /** Room remembered from a previous run, waiting for the user to resume it. */
+  private saved: RoomSettings | null;
+  private aliases = new ProjectAliases();
   private supabase: SupabaseClient | null = null;
   private channel: RealtimeChannel | null = null;
   private failures = 0;
@@ -101,18 +144,25 @@ export class RoomManager {
   private readonly log: (...args: unknown[]) => void;
   private listeners = new Set<() => void>();
 
-  constructor({ env, log, file = ROOM_FILE }: RoomManagerOptions) {
+  constructor({ env, identity, log, file = ROOM_FILE }: RoomManagerOptions) {
     this.log = log;
     this.file = file;
+    this.identity = identity;
     this.cloud = resolveCloud(env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
     const fromEnv = roomSettingsFromEnv(env);
     if (fromEnv.problem) log(`[room] ignoring env room: ${fromEnv.problem}`);
     this.pinned = fromEnv.settings !== null;
-    this.settings = fromEnv.settings ?? loadSavedRoom(file);
+    // An explicit env setting is a deliberate choice; a remembered room waits for confirmation.
+    this.active = fromEnv.settings;
+    this.saved = this.pinned ? null : loadSavedRoom(file);
   }
 
   get current(): RoomSettings | null {
-    return this.cloud ? this.settings : null;
+    return this.cloud ? this.active : null;
+  }
+
+  get resumable(): RoomSettings | null {
+    return this.cloud && !this.active ? this.saved : null;
   }
 
   onChange(listener: () => void): () => void {
@@ -120,15 +170,17 @@ export class RoomManager {
     return () => this.listeners.delete(listener);
   }
 
-  /** Switch rooms (or stop sharing with null). Returns false if pinned by env. */
+  /** Start sharing (or stop with null). Returns false if pinned by env. */
   set(settings: RoomSettings | null): boolean {
     if (this.pinned) return false;
     const same =
-      settings?.room === this.settings?.room &&
-      settings?.name === this.settings?.name &&
-      settings?.shareDetails === this.settings?.shareDetails;
-    if (same) return true;
-    this.settings = settings;
+      settings?.room === this.active?.room &&
+      settings?.name === this.active?.name &&
+      settings?.shareDetails === this.active?.shareDetails;
+    if (same && (settings !== null || this.saved === null)) return true;
+    if (settings?.room !== this.active?.room) this.aliases = new ProjectAliases();
+    this.active = settings;
+    this.saved = settings;
     this.resetChannel();
     try {
       if (settings) {
@@ -140,7 +192,12 @@ export class RoomManager {
     } catch (error) {
       this.log(`[room] could not remember room: ${(error as Error).message}`);
     }
-    this.log(settings ? `[room] sharing as "${settings.name}" in room "${settings.room}"` : '[room] stopped sharing');
+    this.log(
+      settings
+        ? `[room] SHARING as "${settings.name}" in room "${settings.room}"` +
+            (settings.shareDetails ? ' (with project names, files and commands)' : ' (tool names only)')
+        : '[room] stopped sharing',
+    );
     for (const listener of this.listeners) listener();
     return true;
   }
@@ -150,10 +207,10 @@ export class RoomManager {
     if (!settings || !this.cloud) return;
     this.supabase ??= createClient(this.cloud.url, this.cloud.key, { auth: { persistSession: false } });
     this.channel ??= this.supabase.channel(roomTopic(settings.room));
-    const message = toRoomMessage(event, settings);
+    const envelope = signRoomContent(toRoomContent(event, settings, this.identity.publicKey, this.aliases), this.identity);
     // Fire and forget: a slow or unreachable Supabase must never delay hooks.
     this.channel
-      .httpSend(ROOM_EVENT, message, { timeout: 5000 })
+      .httpSend(ROOM_EVENT, envelope, { timeout: 5000 })
       .then((result) => {
         if (result.success) {
           if (this.failures > 0) this.log(`[room] sending again after ${this.failures} failed attempt(s)`);

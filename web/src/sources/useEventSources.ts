@@ -33,17 +33,22 @@ export function useEventSources(): void {
     return attachSource(new RoomSource(settings, room, name), { clearOnDetach: true });
   }, [room, name]);
 
-  // Keep the local bridge sharing to the same room the browser is in, so
-  // joining a room here is all anyone has to do.
+  // Keep the local bridge in line with what you chose in this page: share
+  // to the room only after you joined (or confirmed resuming) it here, and
+  // stop when you stop.
   const bridgeConnected = useSourceStore((s) => s.sources.bridge?.state === 'connected');
   const bridge = useSourceStore((s) => s.bridgeIdentity);
   const shareDetails = useSourceStore((s) => s.shareDetails);
+  const sharingWanted = useSourceStore((s) => s.sharingWanted);
   useEffect(() => {
     if (!bridgeConnected || !bridge?.cloud) return;
-    const wanted = room && name ? { room, name, shareDetails } : null;
-    const inSync = wanted
-      ? bridge.room === wanted.room && bridge.name === wanted.name && (bridge.shareDetails ?? false) === wanted.shareDetails
-      : !bridge.room;
-    if (!inSync) void setBridgeRoom(wanted);
-  }, [bridgeConnected, bridge, room, name, shareDetails]);
+    const wanted = sharingWanted && room && name ? { room, name, shareDetails } : null;
+    if (wanted) {
+      const inSync =
+        bridge.room === wanted.room && bridge.name === wanted.name && (bridge.shareDetails ?? false) === wanted.shareDetails;
+      if (!inSync) void setBridgeRoom(wanted);
+    } else if (bridge.room) {
+      void setBridgeRoom(null);
+    }
+  }, [bridgeConnected, bridge, room, name, shareDetails, sharingWanted]);
 }
