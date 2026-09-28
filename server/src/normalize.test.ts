@@ -138,13 +138,44 @@ describe('toRoomMessage', () => {
     assert.equal(shared.event.detail, 'cat ~/.secrets');
   });
 
-  it('reads room config from env and rejects half-configured setups', async () => {
-    const { roomConfigFromEnv } = await import('./room');
-    assert.equal(roomConfigFromEnv({}).config, null);
-    assert.ok(roomConfigFromEnv({ GROUNDCREW_ROOM: 'abcdef123' }).problem);
-    assert.ok(roomConfigFromEnv({ SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: 'k', GROUNDCREW_ROOM: 'ab', GROUNDCREW_NAME: 'bob' }).problem);
-    const ok = roomConfigFromEnv({ SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: 'k', GROUNDCREW_ROOM: 'team-rocket-42', GROUNDCREW_NAME: ' bob ' });
-    assert.equal(ok.config?.name, 'bob');
-    assert.equal(ok.config?.shareDetails, false);
+  it('validates room settings from env and from the web app', async () => {
+    const { roomSettingsFromEnv, parseRoomSettings } = await import('./room');
+    assert.equal(roomSettingsFromEnv({}).settings, null);
+    assert.ok(roomSettingsFromEnv({ GROUNDCREW_ROOM: 'abcdef123' }).problem, 'name is required');
+    assert.ok(roomSettingsFromEnv({ GROUNDCREW_ROOM: 'ab', GROUNDCREW_NAME: 'bob' }).problem, 'code too short');
+    const ok = roomSettingsFromEnv({ GROUNDCREW_ROOM: 'team-rocket-42', GROUNDCREW_NAME: ' bob ' });
+    assert.equal(ok.settings?.name, 'bob');
+    assert.equal(ok.settings?.shareDetails, false);
+    assert.equal(parseRoomSettings({ room: 'x', name: 'a' }), null);
+    assert.equal(parseRoomSettings({ room: 'crew-abcd-efgh', name: '' }), null);
+    assert.deepEqual(parseRoomSettings({ room: 'crew-abcd-efgh', name: 'amy', shareDetails: true }), {
+      room: 'crew-abcd-efgh',
+      name: 'amy',
+      shareDetails: true,
+    });
+  });
+
+  it('remembers the chosen room across restarts, unless pinned by env', async () => {
+    const { RoomManager } = await import('./room');
+    const { mkdtempSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const file = join(mkdtempSync(join(tmpdir(), 'gc-')), 'room.json');
+    const env = { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: 'k' };
+    const quiet = () => {};
+    const first = new RoomManager({ env, log: quiet, file });
+    assert.equal(first.current, null);
+    assert.ok(first.set({ room: 'crew-abcd-efgh', name: 'amy', shareDetails: false }));
+    const second = new RoomManager({ env, log: quiet, file });
+    assert.equal(second.current?.room, 'crew-abcd-efgh');
+    second.set(null);
+    assert.equal(new RoomManager({ env, log: quiet, file }).current, null);
+
+    const pinned = new RoomManager({ env: { ...env, GROUNDCREW_ROOM: 'team-rocket-42', GROUNDCREW_NAME: 'bob' }, log: quiet, file });
+    assert.equal(pinned.set(null), false);
+    assert.equal(pinned.current?.room, 'team-rocket-42');
+
+    const noCloud = new RoomManager({ env: {}, log: quiet, file });
+    assert.equal(noCloud.current, null, 'no Supabase project configured means no sharing');
   });
 });

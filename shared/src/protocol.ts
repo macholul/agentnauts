@@ -11,7 +11,16 @@ export type ServerMessage =
    * Sent once right after a browser connects. `room` / `name` are set when
    * the bridge is forwarding this machine's events to a multiplayer room.
    */
-  | { type: 'hello'; server: 'groundcrew'; version: string; room?: string; name?: string }
+  | {
+      type: 'hello';
+      server: 'groundcrew';
+      version: string;
+      /** Whether this build has a multiplayer (Supabase) project configured. */
+      cloud?: boolean;
+      room?: string;
+      name?: string;
+      shareDetails?: boolean;
+    }
   /** A normalized agent event. */
   | { type: 'event'; event: AgentEvent };
 
@@ -30,7 +39,9 @@ export function parseServerMessage(raw: string): ServerMessage | null {
       type: 'hello',
       server: 'groundcrew',
       version: msg.version,
+      ...(typeof msg.cloud === 'boolean' ? { cloud: msg.cloud } : {}),
       ...(typeof msg.room === 'string' && isValidRoomCode(msg.room) ? { room: msg.room } : {}),
+      ...(typeof msg.shareDetails === 'boolean' ? { shareDetails: msg.shareDetails } : {}),
       ...(typeof msg.name === 'string' && msg.name ? { name: cleanName(msg.name) } : {}),
     };
   }

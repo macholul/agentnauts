@@ -12,7 +12,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { BRIDGE_WS_PATH, DEFAULT_BRIDGE_PORT, type AgentEvent, type ServerMessage } from '@groundcrew/shared';
 import { normalizeHookPayload } from './normalize';
 import { isAllowedOrigin } from './origin';
-import { createRoomForwarder, roomConfigFromEnv } from './room';
+import { RoomManager, parseRoomSettings } from './room';
 
 // Optional settings file next to package.json (see .env.example).
 try {
@@ -28,10 +28,6 @@ const HOST = process.env.HOST ?? '127.0.0.1';
 const MAX_BODY_BYTES = 20 * 1024 * 1024;
 const QUIET = process.env.GROUNDCREW_QUIET === '1';
 
-const roomSettings = roomConfigFromEnv(process.env);
-if (roomSettings.problem) console.warn(`[groundcrew] multiplayer disabled: ${roomSettings.problem}`);
-const roomConfig = roomSettings.config;
-
 const extraOrigins = (process.env.ALLOWED_ORIGINS ?? '')
   .split(',')
   .map((o) => o.trim())
@@ -40,6 +36,9 @@ const extraOrigins = (process.env.ALLOWED_ORIGINS ?? '')
 function log(...args: unknown[]): void {
   if (!QUIET) console.log(new Date().toISOString().slice(11, 19), ...args);
 }
+
+// Multiplayer room this bridge shares to (chosen in the web app, remembered on disk).
+const rooms = new RoomManager({ env: process.env, log });
 
 function preview(text: string, max = 300): string {
   const flat = text.replace(/\s+/g, ' ');
@@ -81,7 +80,7 @@ function setCors(req: http.IncomingMessage, res: http.ServerResponse): void {
   if (origin && isAllowedOrigin(origin, extraOrigins)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   }
 }
@@ -100,19 +99,27 @@ function broadcast(message: ServerMessage): void {
   }
 }
 
+function helloMessage(): ServerMessage {
+  const room = rooms.current;
+  return {
+    type: 'hello',
+    server: 'groundcrew',
+    version: VERSION,
+    cloud: rooms.cloud !== null,
+    ...(room ? { room: room.room, name: room.name, shareDetails: room.shareDetails } : {}),
+  };
+}
+
+// Tell open browsers whenever the shared room changes.
+rooms.onChange(() => broadcast(helloMessage()));
+
 wss.on('connection', (socket, req) => {
   alive.set(socket, true);
   socket.on('pong', () => alive.set(socket, true));
   socket.on('error', (error) => log('[ws] client error:', error.message));
   socket.on('close', () => log(`[ws] browser disconnected (${wss.clients.size} connected)`));
   // Browsers never need to send us anything; ignore whatever they do send.
-  const hello: ServerMessage = {
-    type: 'hello',
-    server: 'groundcrew',
-    version: VERSION,
-    ...(roomConfig ? { room: roomConfig.room, name: roomConfig.name } : {}),
-  };
-  socket.send(JSON.stringify(hello));
+  socket.send(JSON.stringify(helloMessage()));
   log(`[ws] browser connected from ${req.headers.origin ?? req.socket.remoteAddress} (${wss.clients.size} connected)`);
 });
 
@@ -179,12 +186,35 @@ async function handleEvent(req: http.IncomingMessage, res: http.ServerResponse):
   for (const event of result.events) {
     log(`[hooks] ${describe(event)}`);
     broadcast({ type: 'event', event });
-    roomForwarder?.forward(event);
+    rooms.forward(event);
   }
   send(res, 204);
 }
 
-const roomForwarder = roomConfig ? createRoomForwarder(roomConfig, log) : null;
+/** PUT /room {room, name, shareDetails} starts sharing; DELETE /room stops. */
+async function handleRoom(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  if (!rooms.cloud) {
+    send(res, 409, { error: 'multiplayer is not configured in this build' });
+    return;
+  }
+  let settings = null;
+  if (req.method === 'PUT') {
+    try {
+      settings = parseRoomSettings(JSON.parse(await readBody(req)));
+    } catch {
+      settings = null;
+    }
+    if (!settings) {
+      send(res, 400, { error: 'expected {room, name, shareDetails}' });
+      return;
+    }
+  }
+  if (!rooms.set(settings)) {
+    send(res, 409, { error: 'room is fixed by GROUNDCREW_ROOM on the bridge' });
+    return;
+  }
+  send(res, 200, rooms.current ?? {});
+}
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
@@ -208,6 +238,13 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (url.pathname === '/room') {
+    if (req.method === 'GET') send(res, 200, rooms.current ?? {});
+    else if (req.method === 'PUT' || req.method === 'DELETE') void handleRoom(req, res);
+    else send(res, 405);
+    return;
+  }
+
   if (req.method === 'GET' && url.pathname === '/health') {
     send(res, 200, { ok: true, version: VERSION, clients: wss.clients.size });
     return;
@@ -219,6 +256,7 @@ const server = http.createServer((req, res) => {
       `groundcrew event bridge ${VERSION}\n\n` +
         `POST /event   Claude Code hook JSON\n` +
         `GET  /health  status\n` +
+        `PUT  /room    share this machine's agents in a multiplayer room (DELETE to stop)\n` +
         `WS   ${BRIDGE_WS_PATH}      normalized events for the visualizer\n`,
     );
     return;
@@ -252,17 +290,20 @@ server.listen(PORT, HOST, () => {
   console.log(`[groundcrew] event bridge listening on http://${HOST === '::' ? 'localhost' : HOST}:${PORT}`);
   console.log(`[groundcrew]   hooks  → POST http://localhost:${PORT}/event`);
   console.log(`[groundcrew]   browser ← ws://localhost:${PORT}${BRIDGE_WS_PATH}`);
-  if (roomConfig) {
+  const room = rooms.current;
+  if (room) {
     console.log(
-      `[groundcrew]   room   → sharing as "${roomConfig.name}" in room "${roomConfig.room}"` +
-        (roomConfig.shareDetails ? ' (with file names and commands)' : ' (tool names only)'),
+      `[groundcrew]   room   → sharing as "${room.name}" in room "${room.room}"` +
+        (room.shareDetails ? ' (with file names and commands)' : ' (tool names only)'),
     );
+  } else if (!rooms.cloud) {
+    console.log('[groundcrew]   room   → multiplayer not configured (see shared/src/cloud.ts)');
   }
 });
 
 function shutdown(): void {
   clearInterval(heartbeat);
-  void roomForwarder?.close();
+  void rooms.close();
   for (const client of wss.clients) client.close(1001, 'server shutting down');
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 1000).unref();

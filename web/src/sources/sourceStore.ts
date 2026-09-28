@@ -18,6 +18,7 @@ export interface SourceInfo {
 const SIMULATOR_KEY = 'groundcrew.simulator';
 const ROOM_KEY = 'groundcrew.room';
 const NAME_KEY = 'groundcrew.name';
+const DETAILS_KEY = 'groundcrew.shareDetails';
 
 function readStorage(key: string): string | null {
   try {
@@ -42,6 +43,15 @@ function readRoomPreference(): string | null {
   if (fromUrl && isValidRoomCode(fromUrl)) return fromUrl;
   const stored = readStorage(ROOM_KEY);
   return stored && isValidRoomCode(stored) ? stored : null;
+}
+
+/** The local bridge's multiplayer state, from its hello message. */
+export interface BridgeIdentity {
+  /** Bridge was built with a Supabase project configured. */
+  cloud: boolean;
+  room?: string;
+  name?: string;
+  shareDetails?: boolean;
 }
 
 /** Someone else in the room, from Supabase presence. */
@@ -75,12 +85,15 @@ interface SourceStoreState {
   /** Display name shown to others in the room. */
   name: string;
   roommates: Roommate[];
-  /** Room/name the local bridge is sharing as (from its hello message). */
-  bridgeIdentity: { room?: string; name?: string } | null;
+  /** Also share file names / commands / queries with the room. */
+  shareDetails: boolean;
+  /** What the local bridge reported in its hello message. */
+  bridgeIdentity: BridgeIdentity | null;
   joinRoom: (room: string, name: string) => void;
   leaveRoom: () => void;
+  setShareDetails: (share: boolean) => void;
   setRoommates: (roommates: Roommate[]) => void;
-  setBridgeIdentity: (identity: { room?: string; name?: string } | null) => void;
+  setBridgeIdentity: (identity: BridgeIdentity) => void;
 }
 
 export const useSourceStore = create<SourceStoreState>()((set) => ({
@@ -89,6 +102,7 @@ export const useSourceStore = create<SourceStoreState>()((set) => ({
   room: readRoomPreference(),
   name: cleanName(readStorage(NAME_KEY) ?? ''),
   roommates: [],
+  shareDetails: readStorage(DETAILS_KEY) === 'on',
   bridgeIdentity: null,
 
   joinRoom: (room, name) => {
@@ -104,15 +118,24 @@ export const useSourceStore = create<SourceStoreState>()((set) => ({
     set({ room: null, roommates: [] });
   },
 
+  setShareDetails: (share) => {
+    writeStorage(DETAILS_KEY, share ? 'on' : 'off');
+    set({ shareDetails: share });
+  },
+
   setRoommates: (roommates) => set({ roommates }),
 
   setBridgeIdentity: (identity) =>
-    set((s) => ({
-      bridgeIdentity: identity,
-      // Adopt the bridge's room and name if the browser has none yet.
-      room: s.room ?? identity?.room ?? null,
-      name: s.name || identity?.name || '',
-    })),
+    set((s) => {
+      const first = s.bridgeIdentity === null;
+      // On first contact, adopt the room the bridge remembers if the browser has none.
+      const adopt = first && !s.room && identity.room && identity.name;
+      return {
+        bridgeIdentity: identity,
+        ...(adopt ? { room: identity.room!, name: identity.name!, shareDetails: identity.shareDetails ?? false } : {}),
+        name: s.name || identity.name || '',
+      };
+    }),
 
   setSimulatorEnabled: (enabled) => {
     try {

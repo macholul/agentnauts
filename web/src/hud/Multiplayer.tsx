@@ -24,6 +24,9 @@ export function Multiplayer() {
   const name = useSourceStore((s) => s.name);
   const roommates = useSourceStore((s) => s.roommates);
   const bridgeIdentity = useSourceStore((s) => s.bridgeIdentity);
+  const bridgeConnected = useSourceStore((s) => s.sources.bridge?.state === 'connected');
+  const shareDetails = useSourceStore((s) => s.shareDetails);
+  const setShareDetails = useSourceStore((s) => s.setShareDetails);
   const status = useSourceStore((s) => s.sources.room);
   const joinRoom = useSourceStore((s) => s.joinRoom);
   const leaveRoom = useSourceStore((s) => s.leaveRoom);
@@ -35,7 +38,7 @@ export function Multiplayer() {
     return (
       <section className="hud-section">
         <div className="hud-section__title">Multiplayer</div>
-        <div className="hud-empty">Off. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in web/.env (see README).</div>
+        <div className="hud-empty">Not set up in this build yet (see Multiplayer in the README).</div>
       </section>
     );
   }
@@ -80,7 +83,7 @@ export function Multiplayer() {
     );
   }
 
-  const sharing = bridgeIdentity?.room === room;
+  const sharing = bridgeConnected && bridgeIdentity?.room === room;
   return (
     <section className="hud-section">
       <div className="hud-section__title">Multiplayer</div>
@@ -107,9 +110,19 @@ export function Multiplayer() {
           ? 'Nobody else here yet.'
           : `Also watching: ${[...new Set(roommates.map((r) => r.name))].join(', ')}`}
       </div>
-      {!sharing && (
+      {sharing ? (
+        <>
+          <div className="hud-small hud-sharing">Sharing your agents as {bridgeIdentity?.name}</div>
+          <label className="hud-check hud-small">
+            <input type="checkbox" checked={shareDetails} onChange={(e) => setShareDetails(e.target.checked)} />
+            Also share file names &amp; commands
+          </label>
+        </>
+      ) : (
         <div className="hud-note">
-          Watching only. To share your own agents, set GROUNDCREW_ROOM={room} and GROUNDCREW_NAME in server/.env.
+          {bridgeConnected
+            ? 'Watching only: your bridge is pinned to another room.'
+            : 'Watching only. Run the bridge (npm run dev) to share your own agents too.'}
         </div>
       )}
     </section>

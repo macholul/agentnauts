@@ -5,7 +5,7 @@
  * source, so the scene doesn't know or care that they're remote.
  */
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
-import { ROOM_EVENT, makeId, parseRoomMessage, roomTopic, type AgentEvent } from '@groundcrew/shared';
+import { ROOM_EVENT, makeId, parseRoomMessage, resolveCloud, roomTopic, type AgentEvent } from '@groundcrew/shared';
 import { useSourceStore, type Roommate } from './sourceStore';
 import { StatusEmitter, type AgentEventSource, type EventSink, type SourceStatus } from './types';
 
@@ -14,11 +14,9 @@ export interface SupabaseSettings {
   key: string;
 }
 
-/** Supabase settings from VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY, or null if unset. */
+/** The shared Supabase project (shared/src/cloud.ts, overridable via VITE_ env), or null. */
 export function supabaseSettings(): SupabaseSettings | null {
-  const url = import.meta.env.VITE_SUPABASE_URL?.trim();
-  const key = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
-  return url && key ? { url, key } : null;
+  return resolveCloud(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY);
 }
 
 let client: SupabaseClient | null = null;

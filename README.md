@@ -206,55 +206,42 @@ web/  ┌───────────────────────�
   just maps those modes to animation clips. Stations are separate components
   that receive an `activity` ref (0..1).
 
-## Multiplayer (Supabase rooms)
+## Multiplayer (rooms)
 
 Share a room with teammates and everyone's astronauts work on the same base.
-It runs on [Supabase Realtime](https://supabase.com/docs/guides/realtime)
-broadcast channels: nothing is stored in a database, events are just relayed.
+To join, you enter a room code (or open a shared link) and that's it.
 
 ```
 your Claude Code ──hooks──▶ your bridge ──▶ your browser (local, as before)
                                  │
-                                 └──broadcast──▶ Supabase room ──▶ everyone's browser
+                                 └──broadcast──▶ room ──▶ everyone's browser
 ```
 
-**Setup (once per team):** create a free Supabase project and copy its
-project URL and anon (publishable) key from *Project Settings → API*.
-Rooms use public Realtime channels; if joining fails, check that your project's
-Realtime settings allow public (non-private) channels.
+**Using it:** in the HUD's **Multiplayer** panel, type your name and a room
+code (**New** makes one) and press **Join room**, or open a `?room=` link from
+**Copy link**. Your browser tells your local bridge to share your agents in
+that room, and the bridge remembers it across restarts
+(`~/.groundcrew/room.json`). Other people's astronauts are labelled
+`name · project`. Without a running bridge you can still join and watch.
 
-**Each person:**
+**How it's hosted:** rooms are relayed by a single
+[Supabase](https://supabase.com) project shared by everyone using this build
+(Realtime broadcast channels; nothing is stored in a database). **One-time
+setup for the maintainer only:** create a free Supabase project and paste its
+project URL and anon (publishable) key into
+[`shared/src/cloud.ts`](shared/src/cloud.ts) (Project Settings → API). The anon
+key is meant to be public, so committing it is fine. If joining fails, check
+that the project's Realtime settings allow public (non-private) channels.
+Forks can point at their own project with `SUPABASE_URL` /
+`SUPABASE_ANON_KEY` (bridge) and `VITE_SUPABASE_URL` /
+`VITE_SUPABASE_ANON_KEY` (web).
 
-1. `server/.env` (copy from `server/.env.example`):
-
-   ```bash
-   SUPABASE_URL=https://your-project.supabase.co
-   SUPABASE_ANON_KEY=your-anon-key
-   GROUNDCREW_ROOM=crew-abcd-efgh-jkmn   # same code for everyone
-   GROUNDCREW_NAME=alice                 # shown on your astronauts
-   ```
-
-2. `web/.env` (copy from `web/.env.example`):
-
-   ```bash
-   VITE_SUPABASE_URL=https://your-project.supabase.co
-   VITE_SUPABASE_ANON_KEY=your-anon-key
-   ```
-
-3. `npm run dev`. The HUD's **Multiplayer** panel picks up the room from your
-   bridge automatically; you can also join from the panel (**New** makes a
-   random code, **Copy link** shares a `?room=` link). Other people's
-   astronauts are labelled `name · project`.
-
-Someone without a bridge (or without Claude Code) can still open the link to
-watch; the panel says "watching only".
-
-**Privacy.** By default the bridge shares only tool names and states (e.g.
-"Bash", "waiting"), never file names, commands or search queries. Set
-`GROUNDCREW_SHARE_DETAILS=1` to include them. Rooms use public Realtime
-channels, so **the room code is the password**: anyone with your Supabase
-anon key and the code can watch. Use the long random codes from **New**, and
-a separate Supabase project for anything sensitive.
+**Privacy.** By default only tool names and states are shared (e.g. "Bash",
+"waiting"), never file names, commands or search queries; tick **Also share
+file names & commands** in the panel to include them. **The room code is the
+password**: anyone who knows it can watch, so use the long random codes from
+**New**. Free Supabase projects have fair-use limits (concurrent connections
+and messages per month) that are plenty for small teams.
 
 ## Configuration
 
@@ -264,10 +251,10 @@ a separate Supabase project for anything sensitive.
 | `HOST`             | server | `127.0.0.1`           | Bind address. Use `0.0.0.0` to open it to your LAN        |
 | `ALLOWED_ORIGINS`  | server | localhost pages only  | Extra browser origins allowed to connect, comma separated |
 | `GROUNDCREW_QUIET` | server | unset                 | `1` silences per-event logging                            |
-| `SUPABASE_URL`, `SUPABASE_ANON_KEY` | server | unset | Supabase project for multiplayer rooms |
-| `GROUNDCREW_ROOM`, `GROUNDCREW_NAME` | server | unset | Room to share your agents in, and your display name |
+| `GROUNDCREW_ROOM`, `GROUNDCREW_NAME` | server | unset | Pin the bridge to a room (normally chosen in the web app) |
 | `GROUNDCREW_SHARE_DETAILS` | server | unset | `1` also shares file names / commands with the room |
-| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | web | unset | Enables the Multiplayer panel |
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY` | server | `shared/src/cloud.ts` | Use a different Supabase project |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | web | `shared/src/cloud.ts` | Use a different Supabase project |
 | `VITE_BRIDGE_URL`  | web    | `ws://<page host>:4747/ws` | Where the browser connects                           |
 
 The bridge only listens on loopback by default, and only accepts browser

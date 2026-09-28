@@ -8,6 +8,26 @@ import { BRIDGE_WS_PATH, DEFAULT_BRIDGE_PORT, parseServerMessage } from '@ground
 import { useSourceStore } from './sourceStore';
 import { StatusEmitter, type AgentEventSource, type EventSink, type SourceStatus } from './types';
 
+/**
+ * Tell the local bridge which room to share this machine's agents in (or
+ * null to stop). The bridge answers with a fresh hello over the WebSocket.
+ */
+export async function setBridgeRoom(settings: { room: string; name: string; shareDetails: boolean } | null): Promise<boolean> {
+  const url = new URL(defaultBridgeUrl());
+  url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:';
+  url.pathname = '/room';
+  try {
+    const res = await fetch(url, {
+      method: settings ? 'PUT' : 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      ...(settings ? { body: JSON.stringify(settings) } : {}),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 /** VITE_BRIDGE_URL overrides the default ws://<page host>:4747/ws. */
 export function defaultBridgeUrl(): string {
   const configured = import.meta.env.VITE_BRIDGE_URL;
@@ -87,9 +107,13 @@ export class BridgeSource implements AgentEventSource {
         return;
       }
       if (parsed.type === 'hello') {
-        useSourceStore.getState().setBridgeIdentity(
-          parsed.room || parsed.name ? { ...(parsed.room ? { room: parsed.room } : {}), ...(parsed.name ? { name: parsed.name } : {}) } : null,
-        );
+        const { cloud, room, name, shareDetails } = parsed;
+        useSourceStore.getState().setBridgeIdentity({
+          cloud: cloud ?? false,
+          ...(room ? { room } : {}),
+          ...(name ? { name } : {}),
+          ...(shareDetails !== undefined ? { shareDetails } : {}),
+        });
       }
       if (parsed.type === 'event') this.sink?.(parsed.event);
     };
