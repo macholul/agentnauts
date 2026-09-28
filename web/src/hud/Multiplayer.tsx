@@ -55,17 +55,22 @@ function useAction() {
   return { busy, error, run };
 }
 
-/** Sign in with a one-time code sent by email (no password). */
+/**
+ * Sign in by email, no password. The email has a sign-in link (and a code
+ * too, if the Supabase email template includes one); clicking the link signs
+ * this browser in and every open groundcrew tab updates by itself.
+ */
 function SignIn() {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [sent, setSent] = useState(false);
+  const [useCode, setUseCode] = useState(false);
   const { busy, error, run } = useAction();
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!sent) void run(async () => { await sendSignInCode(email); setSent(true); });
-    else void run(() => verifySignInCode(email, code));
+    else if (useCode) void run(() => verifySignInCode(email, code));
   };
 
   return (
@@ -80,23 +85,50 @@ function SignIn() {
           disabled={sent}
           onChange={(e) => setEmail(e.target.value)}
         />
-        {sent && (
-          <input
-            className="hud-input hud-room-code"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            placeholder="Code from the email"
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
-          />
-        )}
-        <button type="submit" className="hud-button" disabled={busy || !email.includes('@') || (sent && code.length < 6)}>
-          {sent ? 'Sign in' : 'Email me a code'}
-        </button>
-        {sent && (
-          <button type="button" className="hud-action hud-small" onClick={() => { setSent(false); setCode(''); }}>
-            Use a different email
+        {!sent && (
+          <button type="submit" className="hud-button" disabled={busy || !email.includes('@')}>
+            Email me a sign-in link
           </button>
+        )}
+        {sent && (
+          <div className="hud-note hud-note--ask">
+            Check your inbox and click the link in the email from Supabase, in this browser. This page signs in by
+            itself.
+          </div>
+        )}
+        {sent && useCode && (
+          <div className="hud-form__row">
+            <input
+              className="hud-input hud-room-code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              placeholder="Code from the email"
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
+            />
+            <button type="submit" className="hud-button" disabled={busy || code.length < 6}>
+              Sign in
+            </button>
+          </div>
+        )}
+        {sent && (
+          <div className="hud-small">
+            {!useCode && (
+              <>
+                <button type="button" className="hud-action" onClick={() => setUseCode(true)}>
+                  Got a code instead?
+                </button>
+                {' · '}
+              </>
+            )}
+            <button type="button" className="hud-action" disabled={busy} onClick={() => void run(() => sendSignInCode(email))}>
+              Resend
+            </button>
+            {' · '}
+            <button type="button" className="hud-action" onClick={() => { setSent(false); setCode(''); setUseCode(false); }}>
+              Different email
+            </button>
+          </div>
         )}
       </form>
       {error && <div className="hud-note">{error}</div>}

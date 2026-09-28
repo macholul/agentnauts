@@ -219,7 +219,7 @@ your Claude Code ──hooks──▶ your bridge ──▶ your browser (local,
 
 **Using it** (Multiplayer panel in the HUD):
 
-1. **Sign in** with your email: you get a one-time code (no password).
+1. **Sign in** with your email: click the link Supabase emails you (no password).
 2. **Create a room**, or **ask to join** one with its code / invite link.
 3. The owner sees your request (name + email) and clicks **Let in** or
    **Deny**. Owners can remove people and delete the room later.
@@ -238,11 +238,12 @@ maintainer only:**
    in the SQL editor. It creates the tables, the access rules and the
    join/approve functions.
 3. Authentication → Sign In / Providers: keep **Email** enabled. In
-   Authentication → Emails → *Magic Link*, include `{{ .Token }}` in the
-   template so emails contain the one-time code. Set the Site URL to where
-   people open the app (e.g. `http://localhost:5173`) so the link works too.
-   The built-in email sender is rate-limited; add your own SMTP for bigger
-   teams.
+   Authentication → URL Configuration, set the Site URL to where people open
+   the app (e.g. `http://localhost:5173`) and add it under Redirect URLs, so
+   the sign-in link in the email brings people back to it. The built-in email
+   sender is rate-limited (a few emails per hour); for bigger teams add your
+   own SMTP. With SMTP set up you can also add `{{ .Token }}` to the Magic
+   Link template, and the app accepts the code from the email as well.
 4. Realtime → Settings: turn **off** "Allow public access", so only signed-in
    members can use channels at all.
 

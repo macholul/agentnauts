@@ -56,13 +56,14 @@ export function getSupabase(): SupabaseClient | null {
   return client;
 }
 
-/** Email a one-time sign-in code (and link). Creates the account on first use. */
+/** Email a sign-in link (plus a code if the email template has one). Creates the account on first use. */
 export async function sendSignInCode(email: string): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) throw new Error('Multiplayer is not set up in this build');
   const { error } = await supabase.auth.signInWithOtp({
     email: email.trim(),
-    options: { shouldCreateUser: true, emailRedirectTo: window.location.origin + window.location.pathname },
+    // Come back to this exact page (keeps an invite link's ?room=).
+    options: { shouldCreateUser: true, emailRedirectTo: window.location.href.split('#')[0] },
   });
   if (error) throw error;
 }
