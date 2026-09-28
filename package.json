@@ -10,12 +10,18 @@
     "web"
   ],
   "scripts": {
-    "dev": "npm run dev -w web",
+    "dev": "concurrently -k -n bridge,web -c magenta,cyan \"npm:server\" \"npm:web\"",
+    "web": "npm run dev -w web",
     "server": "npm run dev -w server",
+    "start": "npm run build && concurrently -k -n bridge,web -c magenta,cyan \"npm run start -w server\" \"npm run preview -w web\"",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "build": "npm run build --workspaces --if-present"
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
   },
   "engines": {
     "node": ">=20.19"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
   }
 }
