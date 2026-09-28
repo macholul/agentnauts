@@ -20,7 +20,7 @@ export const OBSTACLES: Obstacle[] = [
   ...DECORATIONS.filter((d) => d.kind === 'rock' || d.kind === 'crystal').map((d) => ({
     x: d.position[0],
     z: d.position[2],
-    radius: d.kind === 'rock' ? d.scale * 1.05 : d.scale * 0.35,
+    radius: d.kind === 'rock' ? d.scale * 1.3 : d.scale * 0.4,
   })),
 ];
 

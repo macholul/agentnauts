@@ -190,6 +190,8 @@ export interface DecorationConfig {
   scale: number;
   rotation: number;
   color: string;
+  /** Per-prop seed: picks the variant and shapes it, so no two look alike. */
+  seed: number;
 }
 
 /** Small deterministic PRNG so the scattered props are the same every load. */
@@ -204,10 +206,10 @@ function mulberry32(seed: number): () => number {
 }
 
 const DECORATION_COLORS: Record<DecorationKind, string[]> = {
-  rock: ['#d7a3b4', '#c795b4', '#c996a8', '#dca7a6', '#cf9cb8', '#d4a0ae'],
-  plant: ['#8ee6c4', '#6fd6c9', '#a3e9b8'],
+  rock: ['#d7a3b4', '#c795b4', '#c996a8', '#dca7a6', '#cf9cb8', '#e0b0a4', '#b99ac2'],
+  plant: ['#8ee6c4', '#6fd6c9', '#a3e9b8', '#ffb3c8', '#c6a8ff'],
   crystal: ['#b9a2ff', '#9fd8ff', '#c7b0ff'],
-  mushroom: ['#ff9fc0', '#ffb38a', '#ff9fc0'],
+  mushroom: ['#ff9fc0', '#ffb38a', '#b9a2ff', '#7fd8c8'],
 };
 
 /** Keep props off the stations, their work spots, the pad and the paths into the middle. */
@@ -216,7 +218,17 @@ function keepsClear(x: number, z: number, margin: number): boolean {
     if (Math.hypot(x - s.position[0], z - s.position[2]) < s.footprint + margin + 1.2) return false;
     for (const a of s.approach) if (Math.hypot(x - a[0], z - a[2]) < margin + 1.0) return false;
   }
-  return Math.hypot(x - PAD_POSITION[0], z - PAD_POSITION[2]) > PAD_RADIUS + margin + 1.5;
+  if (Math.hypot(x - PAD_POSITION[0], z - PAD_POSITION[2]) < PAD_RADIUS + margin + 1.5) return false;
+  // Keep the walking lanes between the pad and each station open.
+  for (const s of Object.values(STATIONS)) {
+    const [ax, , az] = PAD_POSITION;
+    const [bx, , bz] = s.approach[0]!;
+    const abx = bx - ax;
+    const abz = bz - az;
+    const t = Math.max(0, Math.min(1, ((x - ax) * abx + (z - az) * abz) / (abx * abx + abz * abz)));
+    if (Math.hypot(x - (ax + abx * t), z - (az + abz * t)) < margin + 1.6) return false;
+  }
+  return true;
 }
 
 function scatter(): DecorationConfig[] {
@@ -233,20 +245,28 @@ function scatter(): DecorationConfig[] {
       if (!keepsClear(x, z, scale)) continue;
       if (out.some((d) => Math.hypot(d.position[0] - x, d.position[2] - z) < (d.scale + scale) * 1.1 + 0.6)) continue;
       const colors = DECORATION_COLORS[kind];
-      out.push({ kind, position: [x, 0, z], scale, rotation: rand() * Math.PI * 2, color: colors[placed % colors.length]! });
+      out.push({
+        kind,
+        position: [x, 0, z],
+        scale,
+        rotation: rand() * Math.PI * 2,
+        color: colors[Math.floor(rand() * colors.length)]!,
+        seed: Math.floor(rand() * 1e6),
+      });
       placed++;
     }
   };
   // Around the base, where astronauts walk.
-  place('rock', 9, 4, 12.5, 0.4, 0.85);
-  place('plant', 12, 3.5, 13, 0.8, 1.2);
-  place('crystal', 6, 5, 12.5, 0.7, 1.0);
-  place('mushroom', 7, 3.5, 12.5, 0.7, 1.0);
+  // Around the base, where astronauts walk: just a few, so paths stay open.
+  place('rock', 4, 5, 12.5, 0.45, 0.8);
+  place('plant', 6, 4, 13, 0.8, 1.15);
+  place('crystal', 3, 6, 12.5, 0.7, 0.95);
+  place('mushroom', 4, 4, 12.5, 0.7, 1.0);
   // Scenery out in the hills (outside the walkable area).
-  place('rock', 30, 14.5, 55, 1.2, 3.6);
-  place('crystal', 16, 15.5, 50, 1.3, 2.6);
-  place('plant', 22, 15, 45, 1.3, 2.4);
-  place('mushroom', 12, 15, 40, 1.1, 2.2);
+  place('rock', 18, 15, 55, 1.2, 3.6);
+  place('crystal', 9, 16, 50, 1.3, 2.6);
+  place('plant', 14, 15, 45, 1.3, 2.4);
+  place('mushroom', 7, 15.5, 40, 1.1, 2.2);
   return out;
 }
 

@@ -77,10 +77,10 @@ const tuftOffset = (item: Item) => item.scale * 0.2;
  */
 export function GroundClutter() {
   const pebbleItems = useMemo(
-    () => scatter(700, 40, 3, ['#d9a3ad', '#e6b2a4', '#c89cb7', '#f1c3ae'], 0.06, 0.2),
+    () => scatter(450, 40, 3, ['#d9a3ad', '#e6b2a4', '#c89cb7', '#f1c3ae'], 0.06, 0.2),
     [],
   );
-  const tuftItems = useMemo(() => scatter(220, 30, 9, ['#86dcc0', '#6fcfbf', '#a5e5b6'], 0.1, 0.2), []);
+  const tuftItems = useMemo(() => scatter(140, 30, 9, ['#86dcc0', '#6fcfbf', '#a5e5b6'], 0.1, 0.2), []);
   const pebbles = useRef<InstancedMesh>(null);
   const tufts = useRef<InstancedMesh>(null);
   useInstances(pebbles, pebbleItems, pebbleOffset, 0.55);
