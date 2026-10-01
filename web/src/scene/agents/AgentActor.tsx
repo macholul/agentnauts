@@ -14,6 +14,7 @@ import { blobShadowTexture } from "../textures";
 import { Astronaut } from "./Astronaut";
 import { WaitingBubble } from "./WaitingBubble";
 import { createPose } from "./pose";
+import { hashString, seededRandom, syncKey, worldSeconds } from "../../world/sync";
 
 const WALK_SPEED: Record<AgentRole, number> = { commander: 2.4, crew: 2.9 };
 const SCALE: Record<AgentRole, number> = { commander: 1.55, crew: 1.15 };
@@ -21,11 +22,9 @@ const ARRIVE_SECONDS = 1.8;
 const LEAVE_SECONDS = 2.2;
 const DROP_HEIGHT = 20;
 
+/** 0..1 per agent, the same in every browser in a room. */
 function hash01(value: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < value.length; i++)
-    h = Math.imul(h ^ value.charCodeAt(i), 16777619);
-  return ((h >>> 0) % 10000) / 10000;
+  return (hashString(syncKey(value)) % 10000) / 10000;
 }
 
 /** Shortest signed difference between two angles. */
@@ -60,7 +59,8 @@ interface NavState {
   anim: number;
   from: Vector3;
   to: Vector3;
-  lookTimer: number;
+  /** Look-around turn last applied (world clock). */
+  lookTurn: number;
   removed: boolean;
 }
 
@@ -93,7 +93,7 @@ export function AgentActor({ id }: { id: string }) {
     anim: 0,
     from: new Vector3(),
     to: new Vector3(),
-    lookTimer: 0,
+    lookTurn: -1,
     removed: false,
   });
 
@@ -235,11 +235,12 @@ export function AgentActor({ id }: { id: string }) {
               ? "wait"
               : "idle";
         if (p.mode === "idle") {
-          // Look around now and then.
-          n.lookTimer -= dt;
-          if (n.lookTimer <= 0) {
-            n.lookTimer = 1.5 + Math.random() * 2.5;
-            p.look = Math.random() < 0.3 ? 0 : (Math.random() - 0.5) * 1.6;
+          // Look around now and then, on the shared clock.
+          const turn = Math.floor(worldSeconds() / 2.5 + seed * 7);
+          if (turn !== n.lookTurn) {
+            n.lookTurn = turn;
+            const random = seededRandom("look", syncKey(id), turn);
+            p.look = random() < 0.3 ? 0 : (random() - 0.5) * 1.6;
           }
         } else {
           p.look = 0;

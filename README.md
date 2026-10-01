@@ -68,6 +68,27 @@ remembered. Production builds (`npm start`, served on :4173) start with it off.
         ]
       }
     ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
+          }
+        ]
+      }
+    ],
     "Notification": [
       {
         "hooks": [
@@ -79,6 +100,16 @@ remembered. Production builds (`npm start`, served on :4173) start with it off.
       }
     ],
     "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
       {
         "hooks": [
           {
@@ -107,6 +138,16 @@ remembered. Production builds (`npm start`, served on :4173) start with it off.
           }
         ]
       }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
+          }
+        ]
+      }
     ]
   }
 }
@@ -120,11 +161,9 @@ bridge never breaks Claude Code: curl fails fast with "connection refused" and
 the hook still exits 0. The bridge replies with an empty body, so nothing ends
 up on the hook's stdout.
 
-**Optional extra hooks.** The bridge also understands `SubagentStart` (crew
-drop in as soon as a subagent launches rather than on its first tool call),
-`SessionEnd` (the commander flies home when you quit) and `UserPromptSubmit`
-(shows "Thinking…"). Add them with the same command if you like. Sessions that
-go quiet for 30 minutes fly home on their own.
+`SessionEnd` makes the commander fly home when you quit, `SubagentStart` drops
+crew in as soon as a subagent launches, and `UserPromptSubmit` shows
+"Thinking…". Sessions that go quiet for 30 minutes fly home on their own.
 
 ### Try it without Claude Code
 

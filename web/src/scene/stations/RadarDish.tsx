@@ -12,6 +12,7 @@ import {
   type MeshStandardMaterial,
 } from 'three';
 import { AccentMaterial, Antenna, BodyMaterial, Button, DarkMaterial, Foundation, type StationVisualProps } from './parts';
+import { worldSeconds, oscillate } from '../../world/sync';
 
 const DISH_RADIUS = 0.95;
 const DISH_ANGLE = 0.78;
@@ -30,7 +31,6 @@ export function RadarDish({ accent, activity }: StationVisualProps) {
   const tip = useRef<MeshStandardMaterial>(null);
   const waves = useRef<(Mesh | null)[]>([]);
   const waveMats = useRef<(MeshBasicMaterial | null)[]>([]);
-  const sweep = useRef(0);
 
   const struts = useMemo(
     () =>
@@ -45,11 +45,12 @@ export function RadarDish({ accent, activity }: StationVisualProps) {
     [],
   );
 
-  useFrame(({ clock }, delta) => {
+  useFrame(() => {
     const a = activity.current ?? 0;
-    const t = clock.elapsedTime;
-    sweep.current += delta * (0.15 + a * 1.6);
-    if (turret.current) turret.current.rotation.y = Math.sin(sweep.current) * (0.5 + a * 0.6);
+    const t = worldSeconds();
+    // Slow survey when idle, fast wide scan when busy: both on the shared
+    // clock, so the dish points the same way in every browser.
+    if (turret.current) turret.current.rotation.y = oscillate(t, 0.15, 1.75, a) * (0.5 + a * 0.6);
     if (dish.current) dish.current.rotation.x = 0.75 + Math.sin(t * 0.6 + a) * 0.08 + a * Math.sin(t * 2.3) * 0.12;
     if (tip.current) tip.current.emissiveIntensity = 0.5 + a * (Math.sin(t * 10) > 0 ? 2.5 : 0.6);
     for (let i = 0; i < WAVES; i++) {

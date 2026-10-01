@@ -5,6 +5,7 @@ import { Quaternion, Vector3, type Group, type MeshStandardMaterial } from 'thre
 import { PALETTE } from '../../world/config';
 import { Particles } from '../effects/Particles';
 import { AccentMaterial, BodyMaterial, Button, DarkMaterial, Foundation, type StationVisualProps } from './parts';
+import { worldSeconds } from '../../world/sync';
 
 const APEX = new Vector3(0, 2.0, 0);
 const LEG_BASE_RADIUS = 0.58;
@@ -32,9 +33,9 @@ export function Drill({ accent, activity }: StationVisualProps) {
     [],
   );
 
-  useFrame(({ clock }, delta) => {
+  useFrame((_, delta) => {
     const a = activity.current ?? 0;
-    const t = clock.elapsedTime;
+    const t = worldSeconds();
     if (bit.current) {
       bit.current.rotation.y += delta * (0.4 + a * 14);
       bit.current.position.y = -a * (0.12 + Math.abs(Math.sin(t * 5)) * 0.1);

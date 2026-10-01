@@ -17,6 +17,7 @@ import {
 } from '@groundcrew/shared';
 import { LANDING_PAD, STATIONS, type Vec3 } from '../world/config';
 import { randomPointNear, randomWanderPoint } from '../world/navigation';
+import { hashString, seededRandom, syncKey } from '../world/sync';
 import { groundHeight } from '../world/terrain';
 
 export type AgentRole = 'commander' | 'crew';
@@ -57,8 +58,8 @@ export interface Agent {
   lastEventAt: number;
   /** When the current state began (ms epoch). */
   stateSince: number;
-  /** When an idle astronaut may next wander off (ms epoch). */
-  nextWanderAt: number | null;
+  /** Last wander turn this astronaut acted on (see wanderTurn). */
+  wanderTurn: number | null;
   spawnedAt: number;
   /** Event source that created this agent (e.g. "simulator", "hooks"). */
   source: string | null;
@@ -72,18 +73,27 @@ export const MIN_WORK_MS = 3_000;
 export const STALE_AFTER_MS = 30 * 60_000;
 /** Crew whose SubagentStop never arrived fly home after this long. */
 export const CREW_STALE_AFTER_MS = 5 * 60_000;
+/** Idle astronauts pick a new spot to stroll to once per turn of this length. */
+export const WANDER_TURN_MS = 12_000;
+
+/**
+ * Wandering runs on the shared clock so every browser in a room moves an
+ * idle astronaut to the same spot at the same moment. Each agent's turns are
+ * offset so they don't all set off together.
+ */
+export function wanderTurn(id: string, now: number): number {
+  return Math.floor((now + (hashString(syncKey(id)) % WANDER_TURN_MS)) / WANDER_TURN_MS);
+}
+
+/** Where an idle astronaut strolls to on a given turn: near its own home spot. */
+export function wanderTarget(id: string, turn: number): Vec3 {
+  const key = syncKey(id);
+  const home = randomWanderPoint([0, 0, 0], seededRandom('home', key));
+  return randomWanderPoint(home, seededRandom('wander', key, turn));
+}
 
 /** Ordered for contrast: the first few sessions get clearly different colors. */
 const COMMANDER_COLORS = ['#5b8def', '#ff6b8b', '#20b8a6', '#f59f00', '#8a6cff', '#56b35f', '#ff7a45', '#3fb5e8'];
-
-function hashString(value: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < value.length; i++) {
-    h ^= value.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
 
 /** Mix two #rrggbb colors. */
 function mixHex(a: string, b: string, t: number): string {
@@ -97,10 +107,18 @@ function mixHex(a: string, b: string, t: number): string {
   return `#${((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, '0')}`;
 }
 
+/**
+ * Each session has its own color, the same in every browser. Only when that
+ * color is already on the planet does it move on to the next free one.
+ */
 function pickCommanderColor(sessionId: string, agents: Record<string, Agent>): string {
   const used = new Set(Object.values(agents).filter((a) => a.role === 'commander').map((a) => a.color));
-  const free = COMMANDER_COLORS.find((color) => !used.has(color));
-  return free ?? COMMANDER_COLORS[hashString(sessionId) % COMMANDER_COLORS.length]!;
+  const start = hashString(syncKey(sessionId)) % COMMANDER_COLORS.length;
+  for (let i = 0; i < COMMANDER_COLORS.length; i++) {
+    const color = COMMANDER_COLORS[(start + i) % COMMANDER_COLORS.length]!;
+    if (!used.has(color)) return color;
+  }
+  return COMMANDER_COLORS[start]!;
 }
 
 export function crewId(sessionId: string, subagentId: string): string {
@@ -150,7 +168,7 @@ interface AgentStoreState {
   /** Start the leave animation for an agent and its crew. */
   dismissAgent: (id: string) => void;
   /** Scene: the drop-in animation finished. */
-  landed: (id: string, position: Vec3, now?: number) => void;
+  landed: (id: string, position: Vec3) => void;
   /** Scene: the astronaut reached the destination of move `moveSeq`. */
   arrived: (id: string, moveSeq: number, position: Vec3, now?: number) => void;
   /** Timers: idle timeouts, wandering, stale sessions. Called a few times per second. */
@@ -180,16 +198,18 @@ function createAgent(agents: Agents, options: SpawnOptions): Agent {
     name = siblings.length > 0 ? `${base} ${siblings.length + 1}` : base;
   }
 
-  // Commanders touch down on the pad; crew land around it. Pick the
-  // candidate spot farthest from everyone else so nobody lands on a head.
+  // Commanders touch down on the pad; crew land around it. Candidates come
+  // from the agent's id so every browser picks the same spot; only if
+  // someone is standing there does it try the next one.
   const others = Object.values(agents).map((a) => a.position);
+  const random = seededRandom('land', syncKey(id));
   let landingSpot: Vec3 = LANDING_PAD.position;
   let bestClearance = -1;
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 8 && bestClearance < 0.9; i++) {
     const candidate =
       role === 'commander'
-        ? randomPointNear(LANDING_PAD.position, 0, LANDING_PAD.radius - 0.45)
-        : randomPointNear(LANDING_PAD.position, LANDING_PAD.radius + 0.5, LANDING_PAD.radius + 2.2);
+        ? randomPointNear(LANDING_PAD.position, 0, LANDING_PAD.radius - 0.45, random)
+        : randomPointNear(LANDING_PAD.position, LANDING_PAD.radius + 0.5, LANDING_PAD.radius + 2.2, random);
     const clearance = Math.min(Infinity, ...others.map((p) => Math.hypot(p[0] - candidate[0], p[2] - candidate[2])));
     if (clearance > bestClearance) {
       bestClearance = clearance;
@@ -218,7 +238,7 @@ function createAgent(agents: Agents, options: SpawnOptions): Agent {
     landingSpot,
     lastEventAt: now,
     stateSince: now,
-    nextWanderAt: now + IDLE_AFTER_MS,
+    wanderTurn: null,
     spawnedAt: now,
     source: options.source ?? null,
   };
@@ -284,7 +304,7 @@ function applyIntent(agents: Agents, agent: Agent, intent: Intent, event: AgentE
       return moveTo(next, LANDING_PAD.slots[slot] ?? LANDING_PAD.position, LANDING_PAD.waitYaw);
     }
     case 'idle': {
-      next = { ...next, intent: 'idle', station: null, slot: null, nextWanderAt: now + IDLE_AFTER_MS };
+      next = { ...next, intent: 'idle', station: null, slot: null };
       // Stop walking toward a station; stand wherever we are.
       if (agent.intent !== 'idle' && agent.destination) next = moveTo(next, null, null);
       if (!next.destination) next.state = 'idle';
@@ -387,7 +407,7 @@ export const useAgentStore = create<AgentStoreState>()((set, get) => ({
     set({ agents: patchAgents(agents, leaving) });
   },
 
-  landed: (id, position, now = Date.now()) => {
+  landed: (id, position) => {
     const agent = get().agents[id];
     if (!agent || agent.lifecycle !== 'arriving') return;
     set({
@@ -399,7 +419,6 @@ export const useAgentStore = create<AgentStoreState>()((set, get) => ({
           position,
           // If an event arrived mid-flight we already have somewhere to be.
           state: agent.destination ? 'walking' : agent.state === 'walking' ? 'idle' : agent.state,
-          nextWanderAt: agent.nextWanderAt ?? now + IDLE_AFTER_MS,
         },
       },
     });
@@ -409,8 +428,6 @@ export const useAgentStore = create<AgentStoreState>()((set, get) => ({
     const agent = get().agents[id];
     if (!agent || agent.moveSeq !== moveSeq || agent.lifecycle !== 'active') return;
     const state: AgentState = agent.intent === 'work' ? 'working' : agent.intent === 'wait' ? 'waiting' : 'idle';
-    // Pause a few seconds (look around) before wandering again.
-    const pause = 2500 + Math.random() * 4000;
     set({
       agents: {
         ...get().agents,
@@ -420,7 +437,6 @@ export const useAgentStore = create<AgentStoreState>()((set, get) => ({
           destination: null,
           state,
           stateSince: now,
-          nextWanderAt: state === 'idle' ? Math.max(now + pause, agent.lastEventAt + IDLE_AFTER_MS) : null,
         },
       },
     });
@@ -448,21 +464,15 @@ export const useAgentStore = create<AgentStoreState>()((set, get) => ({
           state: 'idle',
           stateSince: now,
           activity: 'Idle',
-          nextWanderAt: now + 500 + Math.random() * 1500,
         });
         continue;
       }
 
-      if (
-        agent.state === 'idle' &&
-        agent.intent === 'idle' &&
-        !agent.destination &&
-        agent.nextWanderAt !== null &&
-        now >= agent.nextWanderAt &&
-        quietFor >= IDLE_AFTER_MS
-      ) {
-        const target = randomWanderPoint(agent.position);
-        updates.push({ ...moveTo(agent, target, null), activity: 'Wandering', nextWanderAt: null });
+      // Quiet and idle: stroll to this turn's spot. Retargets even mid-walk,
+      // so a browser that joined late catches up within one turn.
+      const turn = wanderTurn(agent.id, now);
+      if (agent.intent === 'idle' && quietFor >= IDLE_AFTER_MS && agent.wanderTurn !== turn) {
+        updates.push({ ...moveTo(agent, wanderTarget(agent.id, turn), null), activity: 'Wandering', wanderTurn: turn });
       }
     }
     if (updates.length > 0) set({ agents: patchAgents(agents, updates) });

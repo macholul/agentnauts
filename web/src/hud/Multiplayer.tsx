@@ -194,9 +194,9 @@ function ChooseRoom({ userId, email }: { userId: string; email: string }) {
         <div className="hud-form__row">
           <input
             className="hud-input hud-room-code"
-            placeholder="crew-xxxx-xxxx-xxxx"
+            placeholder="crew-xxxx-xxxx-xxxx or invite link"
             value={code}
-            maxLength={24}
+            maxLength={200}
             onChange={(e) => setCode(e.target.value)}
           />
           <button type="submit" className="hud-button" disabled={busy || !name || !isValidRoomCode(normalized)}>
@@ -274,7 +274,7 @@ function InRoom({ userId }: { userId: string }) {
   const sharingWanted = useSourceStore((s) => s.sharingWanted);
   const { setShareDetails, setSharing, setRoom } = useSourceStore.getState();
   const [members, refresh] = useMembers(room.id);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const { busy, error, run } = useAction();
 
   // The members list is the source of truth for who owns the room.
@@ -289,6 +289,12 @@ function InRoom({ userId }: { userId: string }) {
   const joined = members.filter((m) => m.status === 'member');
   const verified = Object.values(people).filter((p) => p.key !== bridge?.identity);
   const watchers = [...new Set(roommates.map((r) => r.name))];
+  const copy = (what: 'code' | 'link', text: string) => {
+    void navigator.clipboard?.writeText(text).then(() => {
+      setCopied(what);
+      window.setTimeout(() => setCopied(null), 1500);
+    });
+  };
 
   return (
     <Section>
@@ -301,14 +307,16 @@ function InRoom({ userId }: { userId: string }) {
         <button
           className="hud-action hud-small"
           title={room.code}
-          onClick={() => {
-            void navigator.clipboard?.writeText(shareLink(room.code)).then(() => {
-              setCopied(true);
-              window.setTimeout(() => setCopied(false), 1500);
-            });
-          }}
+          onClick={() => copy('code', room.code)}
         >
-          {copied ? 'Copied!' : 'Invite link'}
+          {copied === 'code' ? 'Copied!' : 'Copy code'}
+        </button>
+        <button
+          className="hud-action hud-small"
+          title={shareLink(room.code)}
+          onClick={() => copy('link', shareLink(room.code))}
+        >
+          {copied === 'link' ? 'Copied!' : 'Invite link'}
         </button>
       </div>
       {status?.state === 'error' && <div className="hud-note">{status.detail}</div>}

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { BridgeSource, sendBridgeToken, setBridgeRoom } from './bridge';
 import { RoomSource } from './room';
 import { myStatus } from './roomsApi';
@@ -72,11 +72,14 @@ export function useEventSources(): void {
 
   // Keep the local bridge in line with what you chose in this page: share
   // only after you joined (or confirmed resuming) here, stop when you stop,
-  // and keep its short-lived access token fresh.
+  // and keep its short-lived access token fresh. Only the page that started
+  // (or adopted) the sharing stops it: another open tab that isn't sharing
+  // must not switch it off.
   const bridgeConnected = useSourceStore((s) => s.sources.bridge?.state === 'connected');
   const bridge = useSourceStore((s) => s.bridgeIdentity);
   const shareDetails = useSourceStore((s) => s.shareDetails);
   const sharingWanted = useSourceStore((s) => s.sharingWanted);
+  const sharedFromHere = useRef(false);
   useEffect(() => {
     if (!bridgeConnected || !bridge?.cloud) return;
     const wanted =
@@ -84,11 +87,13 @@ export function useEventSources(): void {
         ? { roomId: room.id, code: room.code, roomName: room.name, name, shareDetails, accessToken }
         : null;
     if (wanted) {
+      sharedFromHere.current = true;
       const shared = bridge.room;
       const inSync = shared?.roomId === wanted.roomId && shared.name === wanted.name && shared.shareDetails === wanted.shareDetails;
       if (!inSync) void setBridgeRoom(wanted);
       else void sendBridgeToken(accessToken!);
-    } else if (bridge.room) {
+    } else if (bridge.room && sharedFromHere.current) {
+      sharedFromHere.current = false;
       void setBridgeRoom(null);
     }
   }, [bridgeConnected, bridge, member, room, name, shareDetails, sharingWanted, accessToken]);

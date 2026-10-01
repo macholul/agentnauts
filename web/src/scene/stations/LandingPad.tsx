@@ -4,6 +4,7 @@ import { RoundedBox } from '@react-three/drei';
 import { Color, type Group, type MeshStandardMaterial } from 'three';
 import { LANDING_PAD, PAD_SCALE, PALETTE } from '../../world/config';
 import type { ActivityRef } from './parts';
+import { worldSeconds } from '../../world/sync';
 
 const LIGHTS = 12;
 const CALM = new Color(PALETTE.teal);
@@ -19,9 +20,9 @@ export function LandingPad({ activity }: { activity: ActivityRef }) {
   const flag = useRef<Group>(null);
   const color = useRef(new Color());
 
-  useFrame(({ clock }) => {
+  useFrame(() => {
     const a = activity.current ?? 0;
-    const t = clock.elapsedTime;
+    const t = worldSeconds();
     color.current.copy(CALM).lerp(ALERT, a);
     for (let i = 0; i < LIGHTS; i++) {
       const mat = lights.current[i];

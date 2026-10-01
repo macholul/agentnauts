@@ -5,6 +5,7 @@ import { AdditiveBlending, Quaternion, Vector3, type Group, type Mesh, type Mesh
 import { PALETTE } from '../../world/config';
 import type { AgentRole } from '../../store/agentStore';
 import type { AstronautPose } from './pose';
+import { worldSeconds } from '../../world/sync';
 
 export interface AstronautProps {
   color: string;
@@ -77,11 +78,11 @@ export function Astronaut({ color, role, pose, seed }: AstronautProps) {
   const beacon = useRef<MeshStandardMaterial>(null);
   const phase = useRef(seed * 10);
 
-  useFrame(({ clock }, rawDelta) => {
+  useFrame((_, rawDelta) => {
     const p = pose.current;
     if (!p) return;
     const delta = Math.min(rawDelta, 0.1);
-    const t = clock.elapsedTime + seed * 7;
+    const t = worldSeconds() + seed * 7;
     const target: LimbTargets = {
       legL: 0,
       legR: 0,
