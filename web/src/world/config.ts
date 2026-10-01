@@ -146,7 +146,7 @@ export const STATIONS: Record<StationId, StationConfig> = {
   fabricator: station('fabricator', 'Fabricator', 'Edit / Write files', '#ff8a3d', [-10, 0, -1.7], 1.35, 1.75),
   scanner: station('scanner', 'Scanner', 'Read / Grep / Glob', '#2ec4b6', [-1.7, 0, -10], 1.2, 1.65),
   drill: station('drill', 'Drill', 'Bash commands', '#ffc23c', [-5.6, 0, 8.3], 1.2, 1.7),
-  radar: station('radar', 'Radar Dish', 'Web search / fetch', '#ff6f9f', [8.3, 0, -5.6], 1.25, 1.75),
+  radar: station('radar', 'Radar Dish', 'Web and outside tools (MCP)', '#ff6f9f', [8.3, 0, -5.6], 1.25, 1.75),
 };
 
 // ---------------------------------------------------------------------------

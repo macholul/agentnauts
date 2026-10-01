@@ -23,8 +23,13 @@ describe('mapEventToIntent', () => {
       ['Glob', 'scanner'],
       ['LS', 'scanner'],
       ['Bash', 'drill'],
+      ['BashOutput', 'drill'],
       ['WebSearch', 'radar'],
       ['WebFetch', 'radar'],
+      // MCP tools talk to outside services, like the radar.
+      ['mcp__github__get_issue', 'radar'],
+      ['mcp__d1aadfa9-e452-4fc9-a304-99dddf360809__execute_sql', 'radar'],
+      ['mcp__tool', 'radar'],
     ];
     for (const [toolName, station] of cases) {
       const intent = mapEventToIntent(event({ toolName }));
@@ -33,8 +38,7 @@ describe('mapEventToIntent', () => {
     }
   });
 
-  it('idles on unknown tools and Stop, waits on notifications, leaves on end', () => {
-    assert.equal(mapEventToIntent(event({ toolName: 'mcp__github__get_issue' })).kind, 'idle');
+  it('idles on tools without a station and Stop, waits on notifications, leaves on end', () => {
     assert.equal(mapEventToIntent(event({ toolName: 'TodoWrite' })).kind, 'idle');
     assert.equal(mapEventToIntent(event({ type: 'stop' })).kind, 'idle');
     assert.equal(mapEventToIntent(event({ type: 'notification' })).kind, 'wait');
@@ -45,5 +49,14 @@ describe('mapEventToIntent', () => {
   it('describes the activity', () => {
     const intent = mapEventToIntent(event({ toolName: 'Bash', detail: 'npm test' }));
     assert.equal(intent.activity, 'Running npm test');
+  });
+
+  it('gives MCP tools a readable name', () => {
+    const activity = (toolName: string, detail?: string) => mapEventToIntent(event({ toolName, ...(detail ? { detail } : {}) })).activity;
+    assert.equal(activity('mcp__Claude_Browser__preview_logs'), 'Claude Browser: preview logs');
+    assert.equal(activity('mcp__github__get_issue', 'README.md'), 'github: get issue README.md');
+    // A connector registered under an id: the id is noise, the tool is what matters.
+    assert.equal(activity('mcp__d1aadfa9-e452-4fc9-a304-99dddf360809__execute_sql'), 'Using execute sql');
+    assert.equal(activity('mcp__tool'), 'Using an outside tool');
   });
 });
