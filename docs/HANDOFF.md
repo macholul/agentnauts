@@ -80,29 +80,38 @@ agents) is on by default in dev; toggle in the HUD.
   only after an explicit click in the current page; never auto-resumes after a
   bridge restart; "Sharing live" badge while sharing.
 
-## Status: what is NOT verified yet (do this first)
+## Status: verified live (2026-10-01)
 
-The cloud sandbox could not reach `*.supabase.co`, so the live Supabase path
-was only tested against a local fake. Pending, in this order:
+Tested on a real Mac against the real Supabase project:
 
-1. User must finish dashboard setup (see README → Multiplayer):
-   run the migration SQL in the SQL editor; Authentication → URL
-   Configuration: Site URL `http://localhost:5173` and Redirect URL
-   `http://localhost:5173/**`; Realtime → Settings: turn off "Allow public
-   access". (Email templates can't be edited without custom SMTP; not needed.)
-2. Then test for real: sign in (magic link), create a room, second browser
-   with another email asks to join, owner lets in, both share, astronauts
-   appear across browsers. Watch the HUD status dot and browser console.
-   Likely spots to debug if something fails:
-   - `web/src/sources/room.ts`: private channel subscribe / `realtime.setAuth()`.
-   - `server/src/room.ts`: `httpSend` to a private channel with the user's
-     token (401/403 means RLS or token problem).
-   - RLS policies on `realtime.messages` (the `topic_room_id()` helper parses
-     `groundcrew:<uuid>`).
-   - `list_room_members` joins `auth.users` (security definer); if it errors,
-     check grants.
-3. Real GPU check: headless testing ran at ~2 FPS in software rendering;
-   motion smoothness was never seen on real hardware.
+- Single player with real Claude Code sessions (global hooks in
+  `~/.claude/settings.json`); motion is smooth on a real GPU.
+- Multiplayer end to end: magic-link sign-in, create room, ask to join, let
+  in, share from both sides, astronauts appear in each other's world. The
+  private channel accepts sends with the user's token (no 401/403).
+- Dashboard setup that was needed: migration SQL, Site URL
+  `http://localhost:5173`, Redirect URLs `http://localhost:5173/**` (plus
+  `http://localhost:5174/**` for the two-accounts-on-one-machine test),
+  Realtime "Allow public access" off.
+
+Found and fixed during that test:
+
+- `SessionEnd` (and `UserPromptSubmit`, `SubagentStart`,
+  `PostToolUseFailure`) are now in the standard hooks config; without
+  `SessionEnd` closed sessions stayed for 30 minutes.
+- A second open tab on the same bridge switched sharing off right away. Only
+  the page that started (or adopted) sharing stops it now.
+- The join field takes a pasted invite link; rooms have a "Copy code" button.
+- Browsers in a room now show the same world: wandering, landing spots,
+  colors, look-around and station animations come from the agent id and a
+  shared wall clock (`web/src/world/sync.ts`), not `Math.random()` or page
+  uptime. Not synced: free-spinning parts, walk cycles, simulator agents.
+
+Testing two accounts on one machine: run a second bridge with its own `HOME`
+and `PORT=4748`, and a second web app on 5174 with
+`VITE_BRIDGE_URL=ws://localhost:4748/ws`. Post hook JSON to
+`http://localhost:4748/event` with curl to give that side an agent. Note the
+bridge reads the generic `PORT` variable, which some launchers set.
 
 ## Known limits / ideas
 
