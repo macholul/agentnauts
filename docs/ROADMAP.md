@@ -44,20 +44,21 @@ sign-up, for watching their own agents. Team rooms work as today. "Sharing
 into a room" means the daemon has a live agent credential for it; "stop
 sharing" means revoking it.
 
-**`project_agents` table:** `id`, `user_id`, `room_id`, credential,
-`device_name`, `share_details`, `created_at`, `last_seen_at`, `revoked_at`.
+**`project_agents` table:** `id`, `user_id`, `room_id`, `public_key`,
+`device_name`, `share_details`, `created_at`, `last_seen_at`.
 
 - Credential: the machine's existing Ed25519 public key (from
-  `server/src/identity.ts`), with the daemon proving it holds the private key.
-  No secret passes through the browser. (Alternative with the same table and
-  flow: an opaque token shown once, stored as a hash.)
-- Revoked by: the user (a "connected computers" list in the app), or
-  automatically when the membership ends (owner removes them, they leave, the
-  room is deleted).
+  `server/src/identity.ts`). The daemon proves it holds the private key by
+  signing a timestamp. No secret passes through the browser or is stored.
+- Revoking deletes the row. The user can do it (a "connected computers" list
+  in the app), a room's owner can do it for anyone in that room, and it
+  happens automatically when the membership ends (removed, left, room
+  deleted).
 - The exchanged token's identity is the agent row, not the user, so every
   existing access rule and RPC denies it by default. One new rule lets it
-  send to its own room's channel while the row is not revoked, checked on
-  every send.
+  send to its own room's channel while the row exists, checked on every send.
+- Members' own tokens can watch a room and appear in its presence list, but
+  no longer send events: only connected computers do.
 
 What changes from today:
 
@@ -66,7 +67,7 @@ What changes from today:
 | Web page talks to the bridge over `ws://localhost:4747` | Web page only talks to Supabase |
 | Page hands the bridge the user's access token | Daemon has its own per-room, publish-only credential |
 | Bridge publishes only when sharing into one room | Daemon publishes to each room it is connected to (personal room: full details; team rooms: stripped unless opted in) |
-| Page sees nothing until the next event | Page gets a snapshot of current agents when it opens |
+| Page sees nothing until the next event | Page shows the agents already there within 20 seconds of opening |
 | Hooks pasted by hand | Tool installs and removes them |
 
 What stays: hook normalizing (`server/src/normalize.ts`), signed envelopes and
@@ -76,6 +77,13 @@ stripping and project aliases (`toRoomContent`, `ProjectAliases` in
 (`supabase/migrations/…_private_rooms.sql`), the 3D scene and store, the
 shared-clock sync (`web/src/world/sync.ts`), the simulator (becomes the
 signed-out demo).
+
+## Status
+
+- Phase 0: done (2026-10-01).
+- Phase 1: built and run with two accounts on one Mac. Database rules, the
+  Edge Function and a send-only token were checked against the real project
+  (accepted in its own room, refused elsewhere, cut off on revoke).
 
 ## Phases
 
@@ -104,14 +112,15 @@ only, the local WebSocket source is off, and the daemon holds no user session.
     `list_agents`; revocation cascades from `remove_member` / `delete_room`.
   - access rule on `realtime.messages`: an agent token may send to its own
     room's topic only, while not revoked. It cannot receive room traffic.
-- **Edge Function `agent-auth`**: checks the agent's proof (signature over a
-  fresh challenge), checks the row is live, returns a 1-hour send-only token,
-  updates `last_seen_at`.
+- **Edge Function `agent-auth`**: checks the agent's proof (a signed
+  timestamp), returns a 1-hour send-only token for each room that key is
+  connected to, updates `last_seen_at`.
 - **Daemon** (`server/src/room.ts`, `index.ts`): drop the token hand-over
   routes (`PUT /room`, `POST /room/token`); keep a list of connected rooms;
-  refresh each room's token before it expires; publish to each. For
-  snapshots, listen on a tiny per-room "who's here" topic and reply with
-  current agents.
+  refresh each room's token before it expires; publish to each. For pages
+  that open later, resend the current agents every 20 seconds. (The daemon
+  stays send-only and needs no permanent connection, which matters for
+  Realtime's connection limit; the cost is the up-to-20-second wait.)
 - **Web** (`web/src/sources/`): cloud source built from `room.ts`;
   `useEventSources.ts` loses the bridge token sync; the Multiplayer panel's
   share switch becomes connect/revoke; a "connected computers" list;
@@ -207,7 +216,12 @@ is a selling point at launch.
   it is the one piece of server code and the main target of the Phase 4
   review. It must only ever issue send-only tokens for a live agent row.
 - **Realtime quotas** on the free tier: one copy of each event per connected
-  room. Measured in Phase 4.
+  room, plus a snapshot every 20 seconds per room while agents are around.
+  Measured in Phase 4.
+- **Function calls**: a daemon with agents asks `agent-auth` every 30 seconds
+  whether its rooms changed (about 20,000 calls a month for someone working
+  full days). Fine for a beta; before launch, replace it with a cheaper
+  "did anything change" check.
 - **Name not reserved yet**: the npm package, the domain and the GitHub repo
   name are only free, not taken by us, until someone registers them.
 - **Old tool, new site**: handled by the protocol version from Phase 1.

@@ -83,6 +83,45 @@ agents) is on by default in dev; toggle in the HUD.
   only after an explicit click in the current page; never auto-resumes after a
   bridge restart; "Sharing live" badge while sharing.
 
+## Phase 1 of the roadmap: cloud data path (2026-10-01)
+
+See `docs/ROADMAP.md` for the plan. What changed from the notes below:
+
+- The page no longer talks to the daemon. Events go daemon → Supabase
+  Realtime → page. `web/src/sources/bridge.ts` is local mode only
+  (`VITE_LOCAL_BRIDGE=1`).
+- The daemon holds no account session. `server/src/connections.ts` asks the
+  `agent-auth` Edge Function (`supabase/functions/agent-auth/index.ts`) for a
+  send-only token per room, using a signature from `identity.ts`. Rooms it
+  publishes to are rows in `project_agents` for its public key
+  (`supabase/migrations/20261001010000_agents.sql`). `PUT /room`,
+  `/room/token` and `~/.agentnauts/room.json` are gone.
+- Everyone has a personal room (`my_room` RPC) that their computers publish
+  to with full details. Sharing into a team room connects the same computers
+  to that room (details stripped unless opted in).
+- Pairing: the daemon prints `…/#connect=<public key>&device=<name>`; the
+  signed-in page shows the key's short ID and calls `connect_agent`.
+- Late joiners: the daemon resends its current agents every 20 seconds
+  (`agent_snapshot` broadcast); the page adds the ones it doesn't have.
+- On the real Supabase project: the migrations are applied, `agent-auth` is
+  deployed, and the secret `AGENT_JWT_SECRET` (legacy JWT secret) is set.
+  `npm run check:cloud -w server` checks a connected computer end to end.
+- Verified live: a send-only token is accepted in its own room, refused in
+  others, cannot use the REST API, and is refused at once after its row is
+  deleted. The whole flow with two accounts on one Mac (pair both computers,
+  join a room, share, a scripted agent on the second daemon) was run on
+  2026-10-01; Supabase accepted every event in the personal and shared rooms.
+- Learned in that run: Supabase's gateway answers 403 to requests whose body
+  looks like an attack (a piped shell command, SQL). Events with command
+  text were being dropped, so the signed content is now sent as base64url
+  (envelope `v: 3`). Don't put readable commands or file contents in any
+  request to Supabase.
+- Joining or creating a room shares your agents there automatically (your
+  computers are connected to the room); a daemon with agents checks in every
+  30 seconds, so that takes effect within half a minute.
+- MCP tools (`mcp__…`) go to the radar; in rooms without details they are
+  reported under one generic name.
+
 ## Status: verified live (2026-10-01)
 
 Tested on a real Mac against the real Supabase project:
