@@ -1,15 +1,18 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { isValidRoomCode, keyFingerprint, normalizeRoomCode } from '@agentnauts/shared';
-import { setBridgeRoom } from '../sources/bridge';
+import { cleanDeviceName, isValidRoomCode, keyFingerprint, normalizeRoomCode, type PairingRequest } from '@agentnauts/shared';
 import {
   approveMember,
+  connectAgent,
   createRoom,
   deleteRoom,
   listMembers,
   removeMember,
   requestToJoin,
+  revokeAgent,
+  type MyAgent,
   type RoomMember,
 } from '../sources/roomsApi';
+import { isStarting, refreshAgents, shareInRoom, stopSharingInRoom, timeOf, uniqueComputers } from '../sources/sharing';
 import { useSourceStore } from '../sources/sourceStore';
 import { sendSignInCode, signOut, useAuthStore, verifySignInCode } from '../sources/supabase';
 
@@ -22,16 +25,16 @@ function shareLink(code: string): string {
 /** Short, readable ID chip for a public key. */
 function IdChip({ publicKey, title }: { publicKey: string; title?: string }) {
   return (
-    <span className="hud-id" title={title ?? 'Verified ID: only this person can send events with it'}>
+    <span className="hud-id" title={title ?? 'Verified ID: only this computer can send events with it'}>
       ✓ {keyFingerprint(publicKey)}
     </span>
   );
 }
 
-function Section({ children }: { children: ReactNode }) {
+function Section({ title = 'Room', children }: { title?: string; children: ReactNode }) {
   return (
     <section className="hud-section">
-      <div className="hud-section__title">Multiplayer</div>
+      <div className="hud-section__title">{title}</div>
       {children}
     </section>
   );
@@ -61,6 +64,7 @@ function useAction() {
  * this browser in and every open agentnauts tab updates by itself.
  */
 function SignIn() {
+  const pairing = useSourceStore((s) => s.pairing);
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [sent, setSent] = useState(false);
@@ -74,8 +78,14 @@ function SignIn() {
   };
 
   return (
-    <Section>
-      <div className="hud-small hud-muted">Sign in to create or join private rooms.</div>
+    <Section title="Account">
+      {pairing ? (
+        <div className="hud-note hud-note--ask">
+          Sign in to connect this computer <IdChip publicKey={pairing.key} title="Check that the terminal shows the same ID" />
+        </div>
+      ) : (
+        <div className="hud-small hud-muted">Sign in to see your agents here and join private rooms.</div>
+      )}
       <form className="hud-form" onSubmit={submit}>
         <input
           className="hud-input"
@@ -136,46 +146,123 @@ function SignIn() {
   );
 }
 
+function lastSeen(agents: MyAgent[], publicKey: string): string {
+  const times = agents.filter((a) => a.publicKey === publicKey && a.lastSeenAt).map((a) => timeOf(a.lastSeenAt!));
+  if (times.length === 0) return 'not seen yet';
+  const minutes = Math.floor((Date.now() - Math.max(...times)) / 60_000);
+  if (minutes < 2) return 'seen just now';
+  if (minutes < 90) return `seen ${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  return hours < 48 ? `seen ${hours} h ago` : `seen ${Math.round(hours / 24)} days ago`;
+}
+
+/**
+ * A computer asking to be connected (you opened the link its daemon printed).
+ * Connecting registers its public key for your personal room; the computer
+ * never gets your sign-in.
+ */
+function Pairing({ pairing }: { pairing: PairingRequest }) {
+  const personal = useSourceStore((s) => s.personalRoom);
+  const already = useSourceStore((s) => s.agents.some((a) => a.personal && a.publicKey === pairing.key));
+  const [device, setDevice] = useState(pairing.device || 'My computer');
+  const { busy, error, run } = useAction();
+  const done = () => {
+    useSourceStore.getState().setPairing(null);
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  };
+  useEffect(() => {
+    if (already) done();
+  }, [already]);
+
+  return (
+    <Section title="Connect a computer">
+      <div className="hud-note hud-note--ask">
+        <div>
+          A computer wants to send its agents to your account. Check that its terminal shows this ID:{' '}
+          <IdChip publicKey={pairing.key} title="If the terminal shows a different ID, don't connect" />
+        </div>
+        <input
+          className="hud-input"
+          placeholder="Name for this computer"
+          value={device}
+          maxLength={40}
+          onChange={(e) => setDevice(e.target.value)}
+        />
+        <div className="hud-form__row">
+          <button
+            className="hud-button"
+            disabled={busy || !personal || !cleanDeviceName(device)}
+            onClick={() =>
+              void run(async () => {
+                await connectAgent(personal!.id, pairing.key, cleanDeviceName(device), true);
+                await refreshAgents();
+                done();
+              })
+            }
+          >
+            Connect
+          </button>
+          <button className="hud-button hud-button--ghost" disabled={busy} onClick={done}>
+            Not now
+          </button>
+        </div>
+      </div>
+      {error && <div className="hud-note">{error}</div>}
+    </Section>
+  );
+}
+
+/** Your connected computers. Disconnecting one cuts it off everywhere, at once. */
+function Computers() {
+  const agents = useSourceStore((s) => s.agents);
+  const { busy, error, run } = useAction();
+  const computers = uniqueComputers(agents);
+
+  return (
+    <Section title="Your computers">
+      {computers.length === 0 ? (
+        <div className="hud-empty">None connected yet. Start the agentnauts daemon on your computer and open the link it prints.</div>
+      ) : (
+        <ul className="hud-people">
+          {computers.map((computer) => (
+            <li key={computer.publicKey}>
+              <b>{computer.deviceName}</b> <IdChip publicKey={computer.publicKey} title="This computer's ID" />{' '}
+              <span className="hud-muted hud-small">{lastSeen(agents, computer.publicKey)}</span>
+              <button
+                className="hud-action hud-small hud-remove"
+                disabled={busy}
+                onClick={() => {
+                  if (!window.confirm(`Disconnect "${computer.deviceName}"? It stops sending its agents right away.`)) return;
+                  void run(async () => {
+                    for (const agent of agents.filter((a) => a.publicKey === computer.publicKey)) await revokeAgent(agent.id);
+                    await refreshAgents();
+                  });
+                }}
+              >
+                disconnect
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && <div className="hud-note">{error}</div>}
+    </Section>
+  );
+}
+
 /** Signed in, not in a room: create one or ask to join one. */
 function ChooseRoom({ userId, email }: { userId: string; email: string }) {
   const name = useSourceStore((s) => s.name);
   const inviteCode = useSourceStore((s) => s.inviteCode);
-  const bridge = useSourceStore((s) => s.bridgeIdentity);
-  const bridgeConnected = useSourceStore((s) => s.sources.bridge?.state === 'connected');
+  const shareDetails = useSourceStore((s) => s.shareDetails);
   const { setName, setRoom } = useSourceStore.getState();
   const [roomName, setRoomName] = useState('');
   const [code, setCode] = useState(inviteCode ?? '');
   const { busy, error, run } = useAction();
   const normalized = normalizeRoomCode(code);
-  const resumable = bridgeConnected ? bridge?.resumable : undefined;
 
   return (
     <Section>
-      {resumable && (
-        <div className="hud-note hud-note--ask">
-          <div>
-            Before the restart you shared your agents in <b>{resumable.roomName}</b> as <b>{resumable.name}</b>. Share again?
-          </div>
-          <div className="hud-form__row">
-            <button
-              className="hud-button"
-              onClick={() => {
-                setName(resumable.name);
-                // Membership is re-checked right away; if you were removed, this is undone.
-                setRoom(
-                  { id: resumable.roomId, code: resumable.code, name: resumable.roomName, owner: false, status: 'member' },
-                  { share: true, shareDetails: resumable.shareDetails },
-                );
-              }}
-            >
-              Resume sharing
-            </button>
-            <button className="hud-button hud-button--ghost" onClick={() => void setBridgeRoom(null)}>
-              Forget it
-            </button>
-          </div>
-        </div>
-      )}
       <input
         className="hud-input"
         placeholder="Your name in rooms"
@@ -187,7 +274,12 @@ function ChooseRoom({ userId, email }: { userId: string; email: string }) {
         className="hud-form"
         onSubmit={(e) => {
           e.preventDefault();
-          void run(async () => setRoom(await requestToJoin(normalized, name, userId), { share: true }));
+          void run(async () => {
+            const room = await requestToJoin(normalized, name, userId);
+            setRoom(room);
+            // Already a member (your own room, or let in before): share right away.
+            if (room.status === 'member') await shareInRoom(room.id, shareDetails);
+          });
         }}
       >
         <div className="hud-small hud-muted">Join a room (the owner lets you in)</div>
@@ -208,7 +300,11 @@ function ChooseRoom({ userId, email }: { userId: string; email: string }) {
         className="hud-form"
         onSubmit={(e) => {
           e.preventDefault();
-          void run(async () => setRoom(await createRoom(roomName.trim(), name), { share: true }));
+          void run(async () => {
+            const room = await createRoom(roomName.trim(), name);
+            setRoom(room);
+            await shareInRoom(room.id, shareDetails);
+          });
         }}
       >
         <div className="hud-small hud-muted">…or start your own</div>
@@ -226,17 +322,15 @@ function ChooseRoom({ userId, email }: { userId: string; email: string }) {
         </div>
       </form>
       {error && <div className="hud-note">{error}</div>}
+      <div className="hud-small hud-muted">
+        Once you're in a room, your agents are shared with it: tool names only, unless you choose more. You can stop
+        sharing and keep watching.
+      </div>
       <div className="hud-small hud-muted hud-your-id">
         {email} ·{' '}
         <button className="hud-action" onClick={() => void signOut()}>
           Sign out
         </button>
-        {bridge?.identity && (
-          <>
-            {' '}
-            · <IdChip publicKey={bridge.identity} title="Tell teammates this ID so they know it's really you" />
-          </>
-        )}
       </div>
     </Section>
   );
@@ -267,12 +361,11 @@ function InRoom({ userId }: { userId: string }) {
   const room = useSourceStore((s) => s.room)!;
   const people = useSourceStore((s) => s.roomPeople);
   const roommates = useSourceStore((s) => s.roommates);
-  const bridge = useSourceStore((s) => s.bridgeIdentity);
-  const bridgeConnected = useSourceStore((s) => s.sources.bridge?.state === 'connected');
+  const agents = useSourceStore((s) => s.agents);
+  const name = useSourceStore((s) => s.name);
   const status = useSourceStore((s) => s.sources.room);
   const shareDetails = useSourceStore((s) => s.shareDetails);
-  const sharingWanted = useSourceStore((s) => s.sharingWanted);
-  const { setShareDetails, setSharing, setRoom } = useSourceStore.getState();
+  const { setShareDetails, setRoom } = useSourceStore.getState();
   const [members, refresh] = useMembers(room.id);
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const { busy, error, run } = useAction();
@@ -283,11 +376,23 @@ function InRoom({ userId }: { userId: string }) {
     if (members.length > 0 && owner !== room.owner) setRoom({ ...room, owner });
   }, [owner, members.length, room, setRoom]);
 
-  const canShare = bridgeConnected && Boolean(bridge?.cloud);
-  const sharing = canShare && bridge?.room?.roomId === room.id;
+  // Sharing here means your computers are connected to this room too.
+  const computers = uniqueComputers(agents);
+  const here = agents.filter((a) => a.roomId === room.id);
+  const sharing = here.length > 0;
+  const starting = here.filter(isStarting);
+  const notShared = computers.filter((c) => !here.some((a) => a.publicKey === c.publicKey));
+  const share = (details: boolean) => run(() => shareInRoom(room.id, details));
+  // Until each computer has picked the room up, look more often than usual.
+  const waiting = starting.length > 0;
+  useEffect(() => {
+    if (!waiting) return;
+    const handle = window.setInterval(() => void refreshAgents().catch(() => {}), 3000);
+    return () => window.clearInterval(handle);
+  }, [waiting]);
   const pending = members.filter((m) => m.status === 'pending');
   const joined = members.filter((m) => m.status === 'member');
-  const verified = Object.values(people).filter((p) => p.key !== bridge?.identity);
+  const verified = Object.values(people).filter((p) => !agents.some((a) => a.publicKey === p.key));
   const watchers = [...new Set(roommates.map((r) => r.name))];
   const copy = (what: 'code' | 'link', text: string) => {
     void navigator.clipboard?.writeText(text).then(() => {
@@ -323,28 +428,48 @@ function InRoom({ userId }: { userId: string }) {
 
       {sharing ? (
         <>
-          <div className="hud-small hud-sharing">
-            Sharing your agents as {bridge?.room?.name} {bridge?.identity && <IdChip publicKey={bridge.identity} />}
-          </div>
-          {bridge?.needsToken && <div className="hud-note">Refreshing your sign-in for the bridge…</div>}
+          {waiting ? (
+            <div className="hud-note hud-note--ask">
+              Starting to share… waiting for {starting.map((a) => a.deviceName).join(', ')}. A computer picks this up
+              within half a minute while agentnauts is running on it.
+            </div>
+          ) : (
+            <div className="hud-small hud-sharing">
+              Sharing your agents as {name}{' '}
+              {here.map((a) => (
+                <IdChip key={a.id} publicKey={a.publicKey} title={a.deviceName} />
+              ))}
+            </div>
+          )}
+          {notShared.length > 0 && (
+            <button className="hud-action hud-small" disabled={busy} onClick={() => void share(here.every((a) => a.shareDetails))}>
+              Also share {notShared.map((c) => c.deviceName).join(', ')}
+            </button>
+          )}
           <label className="hud-check hud-small">
-            <input type="checkbox" checked={shareDetails} onChange={(e) => setShareDetails(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={here.every((a) => a.shareDetails)}
+              disabled={busy}
+              onChange={(e) => {
+                setShareDetails(e.target.checked);
+                void share(e.target.checked);
+              }}
+            />
             Also share project names, files &amp; commands
           </label>
-          <button className="hud-action hud-small" onClick={() => setSharing(false)}>
+          <button className="hud-action hud-small" disabled={busy} onClick={() => void run(() => stopSharingInRoom(room.id))}>
             Stop sharing (keep watching)
           </button>
         </>
       ) : (
         <div className="hud-note">
-          {!canShare ? (
-            'Watching only. Run the bridge (npm run dev) to share your own agents too.'
-          ) : sharingWanted ? (
-            'Starting to share…'
+          {computers.length === 0 ? (
+            'Watching only. Connect a computer to share your own agents too.'
           ) : (
             <>
               Watching only.{' '}
-              <button className="hud-action" onClick={() => setSharing(true)}>
+              <button className="hud-action" disabled={busy} onClick={() => void share(shareDetails)}>
                 Share my agents here
               </button>
             </>
@@ -427,36 +552,49 @@ function InRoom({ userId }: { userId: string }) {
   );
 }
 
-/** HUD section: sign in, create or join private rooms, control sharing. */
-export function Multiplayer() {
-  const available = useAuthStore((s) => s.available);
-  const loading = useAuthStore((s) => s.loading);
-  const user = useAuthStore((s) => s.user);
+/** A shared room: pick one, wait to be let in, or be in it. */
+function RoomPanel({ userId, email }: { userId: string; email: string }) {
   const room = useSourceStore((s) => s.room);
   const { setRoom } = useSourceStore.getState();
   const { busy, run } = useAction();
 
-  if (!available) {
-    return (
-      <Section>
-        <div className="hud-empty">Not set up in this build yet (see Multiplayer in the README).</div>
-      </Section>
-    );
-  }
-  if (loading) return <Section><div className="hud-empty">…</div></Section>;
-  if (!user) return <SignIn />;
-  if (!room) return <ChooseRoom userId={user.id} email={user.email} />;
+  if (!room) return <ChooseRoom userId={userId} email={email} />;
   if (room.status === 'pending') {
     return (
       <Section>
         <div className="hud-note hud-note--ask">
           Asked to join <b>{room.name}</b>. Waiting for the owner to let you in…
         </div>
-        <button className="hud-action hud-small" disabled={busy} onClick={() => void run(async () => { await removeMember(room.id, user.id); setRoom(null); })}>
+        <button className="hud-action hud-small" disabled={busy} onClick={() => void run(async () => { await removeMember(room.id, userId); setRoom(null); })}>
           Cancel request
         </button>
       </Section>
     );
   }
-  return <InRoom userId={user.id} />;
+  return <InRoom userId={userId} />;
+}
+
+/** HUD sections for a signed-in person: connect computers, share a room. */
+export function Multiplayer() {
+  const available = useAuthStore((s) => s.available);
+  const loading = useAuthStore((s) => s.loading);
+  const user = useAuthStore((s) => s.user);
+  const pairing = useSourceStore((s) => s.pairing);
+
+  if (!available) {
+    return (
+      <Section title="Account">
+        <div className="hud-empty">Not set up in this build yet (see the README).</div>
+      </Section>
+    );
+  }
+  if (loading) return <Section title="Account"><div className="hud-empty">…</div></Section>;
+  if (!user) return <SignIn />;
+  return (
+    <>
+      {pairing && <Pairing pairing={pairing} />}
+      <Computers />
+      <RoomPanel userId={user.id} email={user.email} />
+    </>
+  );
 }

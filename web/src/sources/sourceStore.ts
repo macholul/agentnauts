@@ -3,8 +3,16 @@
  * simulator toggle. The sources themselves live in sourceManager.ts.
  */
 import { create } from 'zustand';
-import { cleanName, isUuid, isValidRoomCode, keyFingerprint, normalizeRoomCode, type BridgeRoom } from '@agentnauts/shared';
-import type { JoinedRoom } from './roomsApi';
+import {
+  cleanName,
+  isUuid,
+  isValidRoomCode,
+  keyFingerprint,
+  normalizeRoomCode,
+  parsePairingHash,
+  type PairingRequest,
+} from '@agentnauts/shared';
+import type { JoinedRoom, MyAgent } from './roomsApi';
 import type { SourceState } from './types';
 
 export interface SourceInfo {
@@ -62,18 +70,38 @@ function readInviteCode(): string | null {
   return isValidRoomCode(code) ? code : null;
 }
 
-/** The local bridge's multiplayer state, from its hello message. */
+/** What a daemon on this machine said about itself (local mode only). */
 export interface BridgeIdentity {
-  /** Bridge was built with a Supabase project configured. */
+  /** Daemon was built with a Supabase project configured. */
   cloud: boolean;
-  /** Room the bridge is sharing to right now. */
-  room?: BridgeRoom;
-  /** Room remembered from before a restart, not shared until you resume it. */
-  resumable?: BridgeRoom;
-  /** Sharing, but its access token expired. */
-  needsToken?: boolean;
-  /** Bridge's public key: your identity in rooms. */
+  /** Its public key: this computer's ID. */
   identity?: string;
+}
+
+const PAIRING_KEY = 'agentnauts.pairing';
+/** A pairing request is kept this long while you sign in. */
+const PAIRING_KEEP_MS = 15 * 60_000;
+
+/**
+ * A "connect this computer" request from the link the daemon prints
+ * (`#connect=<key>`). Signing in by email link reloads the page without the
+ * fragment, so the request is remembered in this browser for a few minutes.
+ */
+export function readPairing(): PairingRequest | null {
+  const fromLink = parsePairingHash(window.location.hash);
+  if (fromLink) {
+    writeStorage(PAIRING_KEY, JSON.stringify({ ...fromLink, at: Date.now() }));
+    return fromLink;
+  }
+  try {
+    const saved = JSON.parse(readStorage(PAIRING_KEY) ?? 'null') as { key?: string; device?: string; at?: number } | null;
+    if (saved && typeof saved.at === 'number' && Date.now() - saved.at < PAIRING_KEEP_MS) {
+      return parsePairingHash(`#connect=${saved.key ?? ''}&device=${encodeURIComponent(saved.device ?? '')}`);
+    }
+  } catch {
+    // Ignore unreadable settings.
+  }
+  return null;
 }
 
 /** Someone whose signed events we've verified in this room. */
@@ -112,6 +140,16 @@ interface SourceStoreState {
   upsertSource: (info: Pick<SourceInfo, 'id' | 'label'> & Partial<SourceInfo>) => void;
   countEvent: (id: string, at: number) => void;
 
+  /** Your own room of one, where your computers send everything. */
+  personalRoom: JoinedRoom | null;
+  setPersonalRoom: (room: JoinedRoom | null) => void;
+  /** Your computers and the rooms each publishes to (from the database). */
+  agents: MyAgent[];
+  setAgents: (agents: MyAgent[]) => void;
+  /** A computer asking to be connected, from the link its daemon printed. */
+  pairing: PairingRequest | null;
+  setPairing: (pairing: PairingRequest | null) => void;
+
   /** Private room you're in (or waiting to be let into). */
   room: JoinedRoom | null;
   /** Room code from an invite link, to pre-fill the join form. */
@@ -119,22 +157,15 @@ interface SourceStoreState {
   /** Display name shown to others in rooms. */
   name: string;
   roommates: Roommate[];
-  /** Also share project names, files and commands with the room. */
+  /** When sharing with a room, also send project names, files and commands. */
   shareDetails: boolean;
-  /**
-   * You said "share my agents" in this page session. Never persisted, so
-   * sharing only ever resumes after a restart when you confirm it.
-   */
-  sharingWanted: boolean;
   /** People whose agents we've seen in the room (signature-verified). */
   roomPeople: Record<string, RoomPerson>;
-  /** What the local bridge reported in its hello message. */
+  /** What a daemon on this machine reported (local mode only). */
   bridgeIdentity: BridgeIdentity | null;
-  /** Enter a room (created, requested or approved); `share` starts sharing once you're a member. */
-  setRoom: (room: JoinedRoom | null, options?: { share?: boolean; shareDetails?: boolean }) => void;
+  /** Enter a room (created, requested or approved), or leave with null. */
+  setRoom: (room: JoinedRoom | null) => void;
   setName: (name: string) => void;
-  /** Share (true) or stop sharing (false) your agents in the current room. */
-  setSharing: (share: boolean) => void;
   notePerson: (key: string, name: string, at: number) => void;
   setShareDetails: (share: boolean) => void;
   setRoommates: (roommates: Roommate[]) => void;
@@ -149,19 +180,25 @@ export const useSourceStore = create<SourceStoreState>()((set) => ({
   name: cleanName(readStorage(NAME_KEY) ?? ''),
   roommates: [],
   shareDetails: readStorage(DETAILS_KEY) === 'on',
-  sharingWanted: false,
   roomPeople: {},
   bridgeIdentity: null,
+  personalRoom: null,
+  agents: [],
+  pairing: readPairing(),
 
-  setRoom: (room, options = {}) => {
+  setPersonalRoom: (personalRoom) => set({ personalRoom }),
+  setAgents: (agents) => set({ agents }),
+  setPairing: (pairing) => {
+    if (!pairing) writeStorage(PAIRING_KEY, null);
+    set({ pairing });
+  },
+
+  setRoom: (room) => {
     writeStorage(ROOM_KEY, room ? JSON.stringify(room) : null);
-    if (options.shareDetails !== undefined) writeStorage(DETAILS_KEY, options.shareDetails ? 'on' : 'off');
     set((s) => ({
       room,
       inviteCode: room ? null : s.inviteCode,
-      ...(options.share !== undefined ? { sharingWanted: options.share } : {}),
-      ...(!room ? { sharingWanted: false, roommates: [] } : {}),
-      ...(options.shareDetails !== undefined ? { shareDetails: options.shareDetails } : {}),
+      ...(!room ? { roommates: [] } : {}),
       ...(room?.id !== s.room?.id ? { roomPeople: {} } : {}),
     }));
   },
@@ -171,8 +208,6 @@ export const useSourceStore = create<SourceStoreState>()((set) => ({
     writeStorage(NAME_KEY, clean);
     set({ name: clean });
   },
-
-  setSharing: (share) => set({ sharingWanted: share }),
 
   notePerson: (key, name, at) =>
     set((s) => {
@@ -188,30 +223,7 @@ export const useSourceStore = create<SourceStoreState>()((set) => ({
 
   setRoommates: (roommates) => set({ roommates }),
 
-  setBridgeIdentity: (identity) =>
-    set((s) => {
-      // If the bridge is already sharing (you confirmed earlier and it kept
-      // running), show that room here. A merely remembered room is NOT
-      // adopted: the panel asks you first.
-      const sharing = identity.room;
-      const adopt = s.bridgeIdentity === null && sharing && (!s.room || s.room.id === sharing.roomId);
-      // The bridge was sharing and now reports it isn't: it restarted. Even
-      // with this page still open, sharing again needs a fresh "yes".
-      const restarted = Boolean(s.bridgeIdentity?.room) && !identity.room;
-      return {
-        bridgeIdentity: identity,
-        ...(restarted ? { sharingWanted: false } : {}),
-        ...(adopt
-          ? {
-              room: s.room ?? { id: sharing.roomId, code: sharing.code, name: sharing.roomName, owner: false, status: 'member' as const },
-              name: s.name || sharing.name,
-              shareDetails: sharing.shareDetails,
-              sharingWanted: true,
-            }
-          : {}),
-        name: s.name || identity.room?.name || identity.resumable?.name || '',
-      };
-    }),
+  setBridgeIdentity: (identity) => set({ bridgeIdentity: identity }),
 
   setSimulatorEnabled: (enabled) => {
     try {

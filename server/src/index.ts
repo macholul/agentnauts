@@ -1,25 +1,33 @@
 /**
- * agentnauts event bridge.
+ * agentnauts daemon.
  *
  *   POST /event   Claude Code hook JSON (stdin of the hook, forwarded by curl)
  *   GET  /health  liveness + connected browser count
- *   WS   /ws      browsers receive normalized AgentEvents here
+ *   GET  /status  this computer's ID and the rooms it publishes to
+ *   WS   /ws      local mode: browsers on this machine receive events here
  *
- * Plain node:http + ws; no framework needed for three routes.
+ * Events go to Supabase, signed, with a send-only token per room (see
+ * connections.ts). The daemon never holds an account session.
+ *
+ * Plain node:http + ws; no framework needed for four routes.
  */
 import http from 'node:http';
+import { hostname } from 'node:os';
 import { WebSocketServer, WebSocket } from 'ws';
 import {
   BRIDGE_WS_PATH,
+  CLOUD,
   DEFAULT_BRIDGE_PORT,
-  parseBridgeRoomRequest,
+  keyFingerprint,
+  pairingLink,
+  resolveCloud,
   type AgentEvent,
   type ServerMessage,
 } from '@agentnauts/shared';
+import { CloudConnections } from './connections';
 import { normalizeHookPayload } from './normalize';
 import { isAllowedOrigin } from './origin';
 import { loadOrCreateIdentity } from './identity';
-import { RoomManager } from './room';
 
 // Optional settings file next to package.json (see .env.example).
 try {
@@ -44,8 +52,15 @@ function log(...args: unknown[]): void {
   if (!QUIET) console.log(new Date().toISOString().slice(11, 19), ...args);
 }
 
-// Multiplayer room this bridge shares to (chosen in the web app, remembered on disk).
-const rooms = new RoomManager({ env: process.env, identity: loadOrCreateIdentity(), log });
+// The rooms this computer publishes to (decided in the web app).
+const connections = new CloudConnections({
+  cloud: resolveCloud(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY),
+  identity: loadOrCreateIdentity(),
+  log,
+});
+const APP_URL = process.env.AGENTNAUTS_APP_URL?.trim() || CLOUD.appUrl;
+/** The link that connects this computer to an account, opened in a signed-in browser. */
+const connectLink = pairingLink(APP_URL, { key: connections.identity.publicKey, device: hostname().replace(/\.local$/, '') });
 
 function preview(text: string, max = 300): string {
   const flat = text.replace(/\s+/g, ' ');
@@ -87,7 +102,7 @@ function setCors(req: http.IncomingMessage, res: http.ServerResponse): void {
   if (origin && isAllowedOrigin(origin, extraOrigins)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   }
 }
@@ -107,21 +122,14 @@ function broadcast(message: ServerMessage): void {
 }
 
 function helloMessage(): ServerMessage {
-  const room = rooms.current;
   return {
     type: 'hello',
     server: 'agentnauts',
     version: VERSION,
-    cloud: rooms.cloud !== null,
-    ...(rooms.cloud ? { identity: rooms.identity.publicKey } : {}),
-    ...(room ? { room } : {}),
-    ...(rooms.resumable ? { resumable: rooms.resumable } : {}),
-    ...(rooms.needsToken ? { needsToken: true } : {}),
+    cloud: connections.cloud !== null,
+    identity: connections.identity.publicKey,
   };
 }
-
-// Tell open browsers whenever the shared room changes.
-rooms.onChange(() => broadcast(helloMessage()));
 
 wss.on('connection', (socket, req) => {
   alive.set(socket, true);
@@ -196,56 +204,9 @@ async function handleEvent(req: http.IncomingMessage, res: http.ServerResponse):
   for (const event of result.events) {
     log(`[hooks] ${describe(event)}`);
     broadcast({ type: 'event', event });
-    rooms.forward(event);
+    connections.forward(event);
   }
   send(res, 204);
-}
-
-/** PUT /room {room, name, shareDetails} starts sharing; DELETE /room stops. */
-/**
- * PUT /room {roomId, code, roomName, name, shareDetails, accessToken} starts
- * sharing; DELETE /room stops; POST /room/token {accessToken} refreshes the
- * token. Only the web app (localhost origin) or local tools can call these.
- */
-async function handleRoom(req: http.IncomingMessage, res: http.ServerResponse, path: string): Promise<void> {
-  if (!rooms.cloud) {
-    send(res, 409, { error: 'multiplayer is not configured in this build' });
-    return;
-  }
-  if (req.method === 'DELETE' && path === '/room') {
-    rooms.set(null);
-    send(res, 200, {});
-    return;
-  }
-  let body: unknown;
-  try {
-    body = JSON.parse(await readBody(req));
-  } catch {
-    send(res, 400, { error: 'expected JSON' });
-    return;
-  }
-  if (req.method === 'PUT' && path === '/room') {
-    const request = parseBridgeRoomRequest(body);
-    if (!request) {
-      send(res, 400, { error: 'expected {roomId, code, roomName, name, shareDetails, accessToken}' });
-      return;
-    }
-    const { accessToken, ...room } = request;
-    rooms.set(room, accessToken);
-    send(res, 200, rooms.current ?? {});
-    return;
-  }
-  if (req.method === 'POST' && path === '/room/token') {
-    const token = (body as { accessToken?: unknown } | null)?.accessToken;
-    if (typeof token !== 'string' || token.length < 20) {
-      send(res, 400, { error: 'expected {accessToken}' });
-      return;
-    }
-    rooms.setToken(token);
-    send(res, 204);
-    return;
-  }
-  send(res, 405);
 }
 
 const server = http.createServer((req, res) => {
@@ -270,9 +231,15 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (url.pathname === '/room' || url.pathname === '/room/token') {
-    if (req.method === 'GET' && url.pathname === '/room') send(res, 200, rooms.current ?? {});
-    else void handleRoom(req, res, url.pathname);
+  if (req.method === 'GET' && url.pathname === '/status') {
+    send(res, 200, {
+      version: VERSION,
+      identity: connections.identity.publicKey,
+      id: keyFingerprint(connections.identity.publicKey),
+      cloud: connections.cloud !== null,
+      rooms: connections.summary,
+      connectLink,
+    });
     return;
   }
 
@@ -284,11 +251,11 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && url.pathname === '/') {
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end(
-      `agentnauts event bridge ${VERSION}\n\n` +
+      `agentnauts daemon ${VERSION}\n\n` +
         `POST /event   Claude Code hook JSON\n` +
-        `GET  /health  status\n` +
-        `PUT  /room    share this machine's agents in a multiplayer room (DELETE to stop)\n` +
-        `WS   ${BRIDGE_WS_PATH}      normalized events for the visualizer\n`,
+        `GET  /health  liveness\n` +
+        `GET  /status  this computer's ID and the rooms it publishes to\n` +
+        `WS   ${BRIDGE_WS_PATH}      local mode: normalized events for a page on this machine\n`,
     );
     return;
   }
@@ -310,7 +277,7 @@ server.on('upgrade', (req, socket, head) => {
 
 server.on('error', (error: NodeJS.ErrnoException) => {
   if (error.code === 'EADDRINUSE') {
-    console.error(`[agentnauts] port ${PORT} is already in use. Is another bridge running? Set PORT to change it.`);
+    console.error(`[agentnauts] port ${PORT} is already in use. Is another daemon running? Set PORT to change it.`);
   } else {
     console.error('[agentnauts] server error:', error);
   }
@@ -318,25 +285,26 @@ server.on('error', (error: NodeJS.ErrnoException) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`[agentnauts] event bridge listening on http://${HOST === '::' ? 'localhost' : HOST}:${PORT}`);
-  console.log(`[agentnauts]   hooks  → POST http://localhost:${PORT}/event`);
-  console.log(`[agentnauts]   browser ← ws://localhost:${PORT}${BRIDGE_WS_PATH}`);
-  const room = rooms.current;
-  if (room) {
-    console.log(
-      `[agentnauts]   room   → SHARING as "${room.name}" in room "${room.roomName}"` +
-        (room.shareDetails ? ' (with project names, files and commands)' : ' (tool names only)'),
-    );
-  } else if (rooms.resumable) {
-    console.log(`[agentnauts]   room   → not sharing; open the web app to resume room "${rooms.resumable.roomName}"`);
-  } else if (!rooms.cloud) {
-    console.log('[agentnauts]   room   → multiplayer not configured (see shared/src/cloud.ts)');
+  console.log(`[agentnauts] daemon listening on http://${HOST === '::' ? 'localhost' : HOST}:${PORT}`);
+  console.log(`[agentnauts]   hooks → POST http://localhost:${PORT}/event`);
+  if (!connections.cloud) {
+    console.log('[agentnauts]   cloud → not configured (see shared/src/cloud.ts); local mode only');
+    return;
   }
+  console.log(`[agentnauts]   this computer's ID: ${keyFingerprint(connections.identity.publicKey)}`);
+  connections.start();
+  void connections.refresh().then(() => {
+    if (connections.ready && connections.summary.length === 0) {
+      console.log('[agentnauts]   not connected to an account yet. Open this link in a browser where you are signed in,');
+      console.log('[agentnauts]   and check that it shows the ID above:');
+      console.log(`[agentnauts]   ${connectLink}`);
+    }
+  });
 });
 
 function shutdown(): void {
   clearInterval(heartbeat);
-  void rooms.close();
+  connections.stop();
   for (const client of wss.clients) client.close(1001, 'server shutting down');
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 1000).unref();

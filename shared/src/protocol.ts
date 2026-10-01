@@ -7,69 +7,32 @@ export const DEFAULT_BRIDGE_PORT = 4747;
 export const BRIDGE_WS_PATH = '/ws';
 
 export type ServerMessage =
-  /**
-   * Sent once right after a browser connects. `room` / `name` are set when
-   * the bridge is forwarding this machine's events to a multiplayer room.
-   */
+  /** Sent once right after a browser connects (local mode only). */
   | {
       type: 'hello';
       server: 'agentnauts';
       version: string;
-      /** Whether this build has a multiplayer (Supabase) project configured. */
+      /** Whether this build has a Supabase project configured. */
       cloud?: boolean;
-      /** Room the bridge is sharing to right now (only after you said so). */
-      room?: BridgeRoom;
-      /** Room remembered from last time, waiting for you to resume it. */
-      resumable?: BridgeRoom;
-      /** Sharing, but the access token expired: open the app to refresh it. */
-      needsToken?: boolean;
-      /** This bridge's public key (its multiplayer identity). */
+      /** This computer's public key (its ID in rooms). */
       identity?: string;
     }
   /** A normalized agent event. */
   | { type: 'event'; event: AgentEvent };
 
-/**
- * A room as the bridge knows it. The id is what access control and the
- * Realtime channel use; the code is what people type to ask to join.
- */
-export interface BridgeRoom {
+/** How one room gets this computer's events: under which name, and with how much detail. */
+export interface RoomSharing {
   roomId: string;
-  code: string;
-  /** Room's display name. */
-  roomName: string;
-  /** Your display name in that room. */
+  /** The person's display name in that room. */
   name: string;
+  /** Also send project names, files and commands. */
   shareDetails: boolean;
-}
-
-/** Body of PUT /room on the bridge: a room plus a short-lived access token. */
-export interface BridgeRoomRequest extends BridgeRoom {
-  /** Supabase access token (JWT) of the signed-in user. Never the refresh token. */
-  accessToken: string;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export function isUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID.test(value);
-}
-
-export function parseBridgeRoom(value: unknown): BridgeRoom | null {
-  if (typeof value !== 'object' || value === null) return null;
-  const v = value as Record<string, unknown>;
-  if (!isUuid(v.roomId) || typeof v.code !== 'string' || !isValidRoomCode(v.code)) return null;
-  const name = typeof v.name === 'string' ? cleanName(v.name) : '';
-  const roomName = typeof v.roomName === 'string' ? v.roomName.trim().slice(0, 40) : '';
-  if (!name) return null;
-  return { roomId: v.roomId, code: v.code, roomName: roomName || v.code, name, shareDetails: v.shareDetails === true };
-}
-
-export function parseBridgeRoomRequest(value: unknown): BridgeRoomRequest | null {
-  const room = parseBridgeRoom(value);
-  const token = (value as { accessToken?: unknown } | null)?.accessToken;
-  if (!room || typeof token !== 'string' || token.length < 20 || token.length > 8192) return null;
-  return { ...room, accessToken: token };
 }
 
 /** Parse and validate a raw WebSocket message. Returns null if it isn't one of ours. */
@@ -88,10 +51,7 @@ export function parseServerMessage(raw: string): ServerMessage | null {
       server: 'agentnauts',
       version: msg.version,
       ...(typeof msg.cloud === 'boolean' ? { cloud: msg.cloud } : {}),
-      ...(parseBridgeRoom(msg.room) ? { room: parseBridgeRoom(msg.room)! } : {}),
-      ...(parseBridgeRoom(msg.resumable) ? { resumable: parseBridgeRoom(msg.resumable)! } : {}),
-      ...(msg.needsToken === true ? { needsToken: true } : {}),
-      ...(typeof msg.identity === 'string' && BASE64URL.test(msg.identity) ? { identity: msg.identity } : {}),
+      ...(typeof msg.identity === 'string' && KEY.test(msg.identity) ? { identity: msg.identity } : {}),
     };
   }
   if (msg.type === 'event' && isAgentEvent(msg.event)) {
@@ -106,6 +66,11 @@ export function parseServerMessage(raw: string): ServerMessage | null {
 
 /** Broadcast event name used on room channels. */
 export const ROOM_EVENT = 'agent_event';
+/**
+ * Broadcast every few seconds with the agents a computer has right now, so
+ * a page that opens later can show them without waiting for their next move.
+ */
+export const ROOM_SNAPSHOT = 'agent_snapshot';
 
 /** Realtime channel name for a room (by id; access rules match on it). */
 export function roomTopic(roomId: string): string {
@@ -146,6 +111,93 @@ export function cleanName(name: string): string {
   return name.replace(/\s+/g, ' ').trim().slice(0, 24);
 }
 
+// --- Agent credentials ---------------------------------------------------------
+//
+// A daemon never holds its owner's account session. It proves it owns its
+// key by signing this message; the agent-auth Edge Function answers with a
+// send-only token for each room that key is connected to.
+
+/** What a daemon signs to authenticate. Must match proofMessage() in supabase/functions/agent-auth. */
+export function agentAuthMessage(publicKey: string, timestamp: number): string {
+  return `agentnauts-agent-auth:${publicKey}:${timestamp}`;
+}
+
+/** One room this computer publishes to, with its current send-only token. */
+export interface AgentConnection {
+  agentId: string;
+  roomId: string;
+  roomName: string;
+  /** The owner's own room (gets full details). */
+  personal: boolean;
+  /** The person's display name in that room. */
+  name: string;
+  shareDetails: boolean;
+  token: string;
+  /** Unix seconds. */
+  expiresAt: number;
+}
+
+export function parseAgentConnections(value: unknown): AgentConnection[] | null {
+  const list = (value as { connections?: unknown } | null)?.connections;
+  if (!Array.isArray(list)) return null;
+  const out: AgentConnection[] = [];
+  for (const item of list) {
+    const v = item as Record<string, unknown> | null;
+    if (!v || !isUuid(v.agentId) || !isUuid(v.roomId) || typeof v.token !== 'string' || typeof v.expiresAt !== 'number') continue;
+    out.push({
+      agentId: v.agentId,
+      roomId: v.roomId,
+      roomName: typeof v.roomName === 'string' ? v.roomName.slice(0, 40) : '',
+      personal: v.personal === true,
+      name: typeof v.name === 'string' ? cleanName(v.name) : '',
+      shareDetails: v.shareDetails === true,
+      token: v.token,
+      expiresAt: v.expiresAt,
+    });
+  }
+  return out;
+}
+
+// --- Pairing -------------------------------------------------------------------
+//
+// To connect a computer, its daemon prints a link to the app that carries
+// the computer's public key. The signed-in page shows the key's short ID to
+// compare with the terminal, and registers the key for a room. The key is in
+// the URL fragment, so it is never sent to the web server.
+
+export interface PairingRequest {
+  /** The computer's Ed25519 public key, base64url. */
+  key: string;
+  /** Suggested name for the computer; the person can change it. */
+  device: string;
+}
+
+/** Computer names: single-line, short. */
+export function cleanDeviceName(name: string): string {
+  return name.replace(/\s+/g, ' ').trim().slice(0, 40);
+}
+
+export function pairingLink(appUrl: string, request: PairingRequest): string {
+  const device = encodeURIComponent(cleanDeviceName(request.device));
+  return `${appUrl.replace(/\/+$/, '')}/#connect=${request.key}&device=${device}`;
+}
+
+/** Read a pairing request from a URL fragment (`location.hash`), or null. */
+export function parsePairingHash(hash: string): PairingRequest | null {
+  const params = new Map<string, string>();
+  for (const part of hash.replace(/^#/, '').split('&')) {
+    const [name, value = ''] = part.split('=');
+    try {
+      if (name) params.set(name, decodeURIComponent(value));
+    } catch {
+      // Not valid percent-encoding: ignore that part.
+    }
+  }
+  const key = params.get('connect') ?? '';
+  if (!KEY.test(key)) return null;
+  return { key, device: cleanDeviceName(params.get('device') ?? '') };
+}
+
 // --- Signed messages ---------------------------------------------------------
 //
 // Each bridge has an Ed25519 key pair (created once, kept on that machine).
@@ -165,26 +217,45 @@ export interface SignedRoomContent {
   event: AgentEvent;
 }
 
-/** What actually goes over the wire. */
+/**
+ * What actually goes over the wire.
+ *
+ * The content is base64url text, not readable JSON: it carries file names
+ * and shell commands, and the gateway in front of Supabase refuses requests
+ * whose text looks like an attack (a piped shell command, a SQL statement).
+ */
 export interface RoomEnvelope {
-  v: 2;
-  /** JSON of SignedRoomContent, exactly as signed. */
+  v: 3;
+  /** JSON of SignedRoomContent or SignedRoomSnapshot, UTF-8, as base64url. */
   data: string;
-  /** Ed25519 signature of `data` (UTF-8), base64url. */
+  /** Ed25519 signature of `data` (the base64url text), base64url. */
   sig: string;
 }
 
+/** Envelope version this build sends and understands. */
+export const ENVELOPE_VERSION = 3;
+
+/** Like SignedRoomContent, for a snapshot of several agents at once. */
+export interface SignedRoomSnapshot {
+  room: string;
+  owner: string;
+  key: string;
+  events: AgentEvent[];
+}
+
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
+/** An Ed25519 public key: 32 bytes as base64url. */
+const KEY = /^[A-Za-z0-9_-]{43}$/;
 
 export function parseRoomEnvelope(payload: unknown): RoomEnvelope | null {
   if (typeof payload !== 'object' || payload === null) return null;
   const msg = payload as Record<string, unknown>;
-  if (msg.v !== 2 || typeof msg.data !== 'string' || typeof msg.sig !== 'string') return null;
-  if (msg.data.length > 20_000 || !BASE64URL.test(msg.sig)) return null;
-  return { v: 2, data: msg.data, sig: msg.sig };
+  if (msg.v !== ENVELOPE_VERSION || typeof msg.data !== 'string' || typeof msg.sig !== 'string') return null;
+  if (msg.data.length > 300_000 || !BASE64URL.test(msg.data) || !BASE64URL.test(msg.sig)) return null;
+  return { v: ENVELOPE_VERSION, data: msg.data, sig: msg.sig };
 }
 
-/** Parse the signed content (only call this after the signature checked out). */
+/** Parse the decoded content of an envelope (trust it only once the signature checked out). */
 export function parseSignedContent(data: string): SignedRoomContent | null {
   let value: unknown;
   try {
@@ -195,8 +266,23 @@ export function parseSignedContent(data: string): SignedRoomContent | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
   if (typeof v.room !== 'string' || typeof v.owner !== 'string' || typeof v.key !== 'string') return null;
-  if (!BASE64URL.test(v.key) || v.key.length !== 43 || !cleanName(v.owner) || !isAgentEvent(v.event)) return null;
+  if (!KEY.test(v.key) || !cleanName(v.owner) || !isAgentEvent(v.event)) return null;
   return { room: v.room, owner: cleanName(v.owner), key: v.key, event: v.event };
+}
+
+/** Parse the decoded content of a snapshot envelope (trust it only once the signature checked out). */
+export function parseSignedSnapshot(data: string): SignedRoomSnapshot | null {
+  let value: unknown;
+  try {
+    value = JSON.parse(data);
+  } catch {
+    return null;
+  }
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v.room !== 'string' || typeof v.owner !== 'string' || typeof v.key !== 'string') return null;
+  if (!KEY.test(v.key) || !cleanName(v.owner) || !Array.isArray(v.events) || v.events.length > 200) return null;
+  return { room: v.room, owner: cleanName(v.owner), key: v.key, events: v.events.filter(isAgentEvent) };
 }
 
 /** Decode base64url to bytes (works in browsers and Node without Buffer). */

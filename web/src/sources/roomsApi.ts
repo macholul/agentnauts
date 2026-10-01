@@ -12,6 +12,31 @@ export interface JoinedRoom {
   /** You own it (can approve and remove people). */
   owner: boolean;
   status: 'pending' | 'member';
+  /** Your own room of one, where your computers send everything. */
+  personal?: boolean;
+}
+
+/** One of your computers, connected to one room. */
+export interface MyAgent {
+  id: string;
+  roomId: string;
+  roomName: string;
+  personal: boolean;
+  /** The computer's public key (its ID). */
+  publicKey: string;
+  deviceName: string;
+  shareDetails: boolean;
+  createdAt: string;
+  lastSeenAt: string | null;
+}
+
+/** A computer that may publish in a room, and whose it is. */
+export interface RoomAgent {
+  publicKey: string;
+  userId: string;
+  /** The owner's display name in that room. */
+  name: string;
+  deviceName: string;
 }
 
 export interface RoomMember {
@@ -34,6 +59,8 @@ function friendly(error: { message: string }): Error {
   const message = error.message;
   if (/no room/i.test(message)) return new Error('No room with that code.');
   if (/JWT|not authenticated|sign in/i.test(message)) return new Error('Please sign in again.');
+  if (/already connected/i.test(message)) return new Error('That computer is already connected to this room by someone else.');
+  if (/join the room first/i.test(message)) return new Error('You are not a member of that room.');
   return new Error(message);
 }
 
@@ -93,4 +120,62 @@ export async function removeMember(roomId: string, userId: string): Promise<void
 export async function deleteRoom(roomId: string): Promise<void> {
   const { error } = await db().rpc('delete_room', { p_room: roomId });
   if (error) throw friendly(error);
+}
+
+/** Your personal room (created the first time). Your computers send everything here. */
+export async function myRoom(displayName: string): Promise<JoinedRoom> {
+  const { data, error } = await db().rpc('my_room', { p_display_name: displayName });
+  if (error) throw friendly(error);
+  const room = data as { id: string; code: string; name: string };
+  return { id: room.id, code: room.code, name: room.name, owner: true, status: 'member', personal: true };
+}
+
+/** Connect one of your computers to a room (or update its name and details setting). */
+export async function connectAgent(roomId: string, publicKey: string, deviceName: string, shareDetails: boolean): Promise<void> {
+  const { error } = await db().rpc('connect_agent', {
+    p_room: roomId,
+    p_public_key: publicKey,
+    p_device_name: deviceName,
+    p_share_details: shareDetails,
+  });
+  if (error) throw friendly(error);
+}
+
+/** Disconnect a computer from a room. It is cut off at once. */
+export async function revokeAgent(agentId: string): Promise<void> {
+  const { error } = await db().rpc('revoke_agent', { p_agent: agentId });
+  if (error) throw friendly(error);
+}
+
+export async function listAgents(): Promise<MyAgent[]> {
+  const { data, error } = await db().rpc('list_agents');
+  if (error) throw friendly(error);
+  return (
+    data as {
+      id: string; room_id: string; room_name: string; personal: boolean; public_key: string;
+      device_name: string; share_details: boolean; created_at: string; last_seen_at: string | null;
+    }[]
+  ).map((a) => ({
+    id: a.id,
+    roomId: a.room_id,
+    roomName: a.room_name,
+    personal: a.personal,
+    publicKey: a.public_key,
+    deviceName: a.device_name,
+    shareDetails: a.share_details,
+    createdAt: a.created_at,
+    lastSeenAt: a.last_seen_at,
+  }));
+}
+
+/** The computers that may publish in a room. Events signed by any other key are dropped. */
+export async function listRoomAgents(roomId: string): Promise<RoomAgent[]> {
+  const { data, error } = await db().rpc('list_room_agents', { p_room: roomId });
+  if (error) throw friendly(error);
+  return (data as { public_key: string; user_id: string; display_name: string; device_name: string }[]).map((a) => ({
+    publicKey: a.public_key,
+    userId: a.user_id,
+    name: a.display_name,
+    deviceName: a.device_name,
+  }));
 }

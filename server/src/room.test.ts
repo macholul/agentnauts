@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, statSync } from 'node:fs';
+import { mkdtempSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -9,29 +9,25 @@ import {
   isValidRoomCode,
   normalizeRoomCode,
   keyFingerprint,
-  parseBridgeRoomRequest,
+  pairingLink,
+  parsePairingHash,
   verifyRoomEnvelope,
+  verifyRoomSnapshot,
   type AgentEvent,
-  type BridgeRoom,
+  type RoomSharing,
 } from '@agentnauts/shared';
 import { loadOrCreateIdentity } from './identity';
-import { ProjectAliases, RoomManager, signRoomContent, toRoomContent, tokenSecondsLeft } from './room';
+import { ProjectAliases, signRoomContent, toRoomContent, toRoomSnapshot } from './room';
 
-const tempFile = (name: string) => join(mkdtempSync(join(tmpdir(), 'gc-')), name);
+const tempFile = (name: string) => join(mkdtempSync(join(tmpdir(), 'an-')), name);
 const code = () => generateRoomCode((n) => webcrypto.getRandomValues(new Uint32Array(n)));
-const quiet = () => {};
 const ROOM_ID = '5f0c2d4e-8b1a-4c3d-9e2f-1a2b3c4d5e6f';
-const makeRoom = (overrides: Partial<BridgeRoom> = {}): BridgeRoom => ({
+const makeRoom = (overrides: Partial<RoomSharing> = {}): RoomSharing => ({
   roomId: ROOM_ID,
-  code: 'crew-abcd-efgh-jkmn',
-  roomName: 'Base',
   name: 'bob',
   shareDetails: false,
   ...overrides,
 });
-/** A JWT-shaped token that expires in `seconds` (only `exp` is read). */
-const token = (seconds: number) =>
-  ['h', Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + seconds })).toString('base64url'), 's'].join('.');
 
 const event: AgentEvent = {
   id: 'e1',
@@ -76,6 +72,23 @@ describe('what gets shared', () => {
     assert.equal(shared.event.detail, 'cat ~/.secrets');
     assert.equal(shared.event.sessionName, 'acme-payments');
   });
+
+  it('does not say which MCP services you use unless details are shared', () => {
+    const mcp = { ...event, toolName: 'mcp__acme_billing__refund_customer' };
+    assert.equal(toRoomContent(mcp, settings, 'KEY', new ProjectAliases()).event.toolName, 'mcp__tool');
+    assert.equal(toRoomContent(mcp, makeRoom({ shareDetails: true }), 'KEY', new ProjectAliases()).event.toolName, mcp.toolName);
+  });
+
+  it('never puts readable commands on the wire', () => {
+    // Supabase's gateway refuses requests whose text looks like an attack, and
+    // shell commands and SQL often do. The signed content travels encoded.
+    const alice = loadOrCreateIdentity(tempFile('alice.json'));
+    const risky = { ...event, detail: `curl -s localhost | node -e "process.stdin"; select * from users; drop table users` };
+    const envelope = signRoomContent(toRoomContent(risky, makeRoom({ shareDetails: true }), alice.publicKey, new ProjectAliases()), alice);
+    const wire = JSON.stringify(envelope);
+    assert.match(envelope.data, /^[A-Za-z0-9_-]+$/);
+    for (const word of ['curl', 'select', 'drop table', 'acme-payments']) assert.ok(!wire.includes(word), word);
+  });
 });
 
 describe('signatures', () => {
@@ -95,11 +108,27 @@ describe('signatures', () => {
     assert.equal(await verifyRoomEnvelope(forged, room), null);
 
     // Tampering with the signed data breaks the signature.
-    const tampered = { ...envelope, data: envelope.data.replace('"alice"', '"eve"') };
+    const edited = Buffer.from(envelope.data, 'base64url').toString('utf8').replace('"alice"', '"eve"');
+    const tampered = { ...envelope, data: Buffer.from(edited, 'utf8').toString('base64url') };
     assert.equal(await verifyRoomEnvelope(tampered, room), null);
 
     // A genuine message can't be replayed into another room.
     assert.equal(await verifyRoomEnvelope(envelope, '00000000-0000-4000-8000-000000000000'), null);
+  });
+
+  it('signs snapshots the same way, with details hidden unless shared', async () => {
+    const alice = loadOrCreateIdentity(tempFile('alice.json'));
+    const mallory = loadOrCreateIdentity(tempFile('mallory.json'));
+    const snapshot = toRoomSnapshot([event, { ...event, id: 'e2', sessionId: 's2' }], makeRoom({ name: 'alice' }), alice.publicKey, new ProjectAliases());
+    const envelope = signRoomContent(snapshot, alice);
+
+    const verified = await verifyRoomSnapshot(envelope, ROOM_ID);
+    assert.equal(verified?.events.length, 2);
+    assert.ok(verified!.events.every((e) => e.detail === undefined && e.sessionName === 'project 1'));
+    assert.equal(await verifyRoomSnapshot(signRoomContent(snapshot, mallory), ROOM_ID), null);
+    assert.equal(await verifyRoomSnapshot(envelope, '00000000-0000-4000-8000-000000000000'), null);
+    // One kind of message can't pass for the other.
+    assert.equal(await verifyRoomEnvelope(envelope, ROOM_ID), null);
   });
 
   it('keeps the same identity across restarts, in a private file', () => {
@@ -112,57 +141,21 @@ describe('signatures', () => {
   });
 });
 
-describe('room settings', () => {
-  it('validates what the web app sends', () => {
-    const good = { ...makeRoom(), accessToken: token(3600) };
-    assert.ok(parseBridgeRoomRequest(good));
-    assert.equal(parseBridgeRoomRequest({ ...good, accessToken: undefined }), null, 'token required');
-    assert.equal(parseBridgeRoomRequest({ ...good, roomId: 'not-a-uuid' }), null);
-    assert.equal(parseBridgeRoomRequest({ ...good, code: 'my-room' }), null);
-    assert.equal(parseBridgeRoomRequest({ ...good, name: '  ' }), null);
-    assert.equal(tokenSecondsLeft('garbage'), -1);
-    assert.ok(tokenSecondsLeft(token(60)) > 50);
+describe('pairing links', () => {
+  const key = loadOrCreateIdentity(tempFile('id.json')).publicKey;
+
+  it('carries the key in the fragment, so it never reaches the web server', () => {
+    const link = pairingLink('https://app.example/', { key, device: "Olive's  MacBook" });
+    const url = new URL(link);
+    assert.equal(url.origin + url.pathname, 'https://app.example/');
+    assert.equal(url.search, '');
+    assert.deepEqual(parsePairingHash(url.hash), { key, device: "Olive's MacBook" });
   });
 
-  it('never resumes a remembered room without being asked, and never stores the token', () => {
-    const file = tempFile('room.json');
-    const env = { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: 'k' };
-    const identity = loadOrCreateIdentity(tempFile('id.json'));
-    const room = makeRoom();
-    // (A function, so TypeScript doesn't narrow getters across set() calls.)
-    const activeRoom = (m: RoomManager) => m.current?.roomId;
-
-    const first = new RoomManager({ env, identity, log: quiet, file });
-    const secret = token(3600);
-    first.set(room, secret);
-    assert.equal(activeRoom(first), ROOM_ID);
-    assert.equal(first.needsToken, false);
-    assert.ok(!readFileSync(file, 'utf8').includes(secret), 'token must not be written to disk');
-
-    // After a restart the room is remembered, but not shared, and has no token.
-    const second = new RoomManager({ env, identity, log: quiet, file });
-    assert.equal(activeRoom(second), undefined);
-    assert.equal(second.resumable?.roomId, ROOM_ID);
-
-    // Resuming is an explicit set() with a fresh token; forgetting clears it for good.
-    second.set(second.resumable, token(3600));
-    assert.equal(activeRoom(second), ROOM_ID);
-    second.set(null);
-    assert.equal(new RoomManager({ env, identity, log: quiet, file }).resumable, null);
-
-    assert.equal(new RoomManager({ env: {}, identity, log: quiet, file }).current, null, 'no Supabase project, no sharing');
-  });
-
-  it('stops sharing when the token expires and picks up a refreshed one', () => {
-    const env = { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: 'k' };
-    const identity = loadOrCreateIdentity(tempFile('id.json'));
-    const manager = new RoomManager({ env, identity, log: quiet, file: tempFile('room.json') });
-    let changes = 0;
-    manager.onChange(() => changes++);
-    manager.set(makeRoom(), token(-10));
-    assert.equal(manager.needsToken, true);
-    manager.setToken(token(3600));
-    assert.equal(manager.needsToken, false);
-    assert.equal(changes, 2, 'browsers are told when sharing starts and when it recovers');
+  it('ignores anything that is not a key', () => {
+    assert.equal(parsePairingHash(''), null);
+    assert.equal(parsePairingHash('#connect=short&device=x'), null);
+    assert.equal(parsePairingHash(`#device=x`), null);
+    assert.deepEqual(parsePairingHash(`#connect=${key}`), { key, device: '' });
   });
 });

@@ -1,27 +1,47 @@
-import { useEffect, useRef } from 'react';
-import { BridgeSource, sendBridgeToken, setBridgeRoom } from './bridge';
+import { useEffect } from 'react';
+import { cleanName } from '@agentnauts/shared';
+import { crewId, useAgentStore } from '../store/agentStore';
+import { BridgeSource } from './bridge';
 import { RoomSource } from './room';
-import { myStatus } from './roomsApi';
+import { myRoom, myStatus } from './roomsApi';
+import { refreshAgents, shareInRoom } from './sharing';
 import { attachSource } from './sourceManager';
 import { SimulatorSource } from './simulator';
-import { useSourceStore } from './sourceStore';
+import { readPairing, useSourceStore } from './sourceStore';
 import { getSupabase, useAuthStore } from './supabase';
+
+/** Local mode: also read events straight from a daemon on this machine. */
+const LOCAL_BRIDGE = import.meta.env.VITE_LOCAL_BRIDGE === '1';
+
+const hasAgent = (sessionId: string, subagentId?: string) =>
+  Boolean(useAgentStore.getState().agents[subagentId ? crewId(sessionId, subagentId) : sessionId]);
 
 /** Starts and stops event sources for the app's lifetime. */
 export function useEventSources(): void {
   const simulatorEnabled = useSourceStore((s) => s.simulatorEnabled);
   const room = useSourceStore((s) => s.room);
+  const personalRoom = useSourceStore((s) => s.personalRoom);
   const name = useSourceStore((s) => s.name);
   const user = useAuthStore((s) => s.user);
-  const accessToken = useAuthStore((s) => s.accessToken);
+  const userId = user?.id;
 
   // Restore a saved sign-in, if any.
   useEffect(() => {
     getSupabase();
   }, []);
 
-  // Real Claude Code events via the local event bridge. Always on.
-  useEffect(() => attachSource(new BridgeSource()), []);
+  useEffect(() => (LOCAL_BRIDGE ? attachSource(new BridgeSource()) : undefined), []);
+
+  // A pairing link opened in a tab that already shows the app only changes
+  // the fragment; the page doesn't reload.
+  useEffect(() => {
+    const onHashChange = () => {
+      const pairing = readPairing();
+      if (pairing) useSourceStore.getState().setPairing(pairing);
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
 
   // Fake agents, toggled from the HUD. Turning it off sends them home.
   useEffect(() => {
@@ -32,18 +52,66 @@ export function useEventSources(): void {
     return attachSource(new SimulatorSource(), { clearOnDetach: true });
   }, [simulatorEnabled]);
 
-  // Multiplayer: everyone else's agents from the private room, once you're
-  // signed in and the owner let you in. Leaving sends them home.
+  // Signed in: find (or create) your personal room, and keep the list of
+  // your computers fresh. Keyed on the user id: the auth client reports the
+  // same user again on every token refresh.
+  useEffect(() => {
+    const store = useSourceStore.getState();
+    if (!userId) {
+      store.setPersonalRoom(null);
+      store.setAgents([]);
+      return;
+    }
+    const email = useAuthStore.getState().user?.email ?? '';
+    if (!store.name) store.setName(cleanName(email.split('@')[0] ?? '') || 'me');
+    let cancelled = false;
+    let loading = false;
+    const load = async () => {
+      if (loading) return;
+      loading = true;
+      try {
+        if (!useSourceStore.getState().personalRoom) {
+          const mine = await myRoom(useSourceStore.getState().name);
+          if (!cancelled) useSourceStore.getState().setPersonalRoom(mine);
+        }
+        if (!cancelled) await refreshAgents();
+      } catch {
+        // Offline: try again next time.
+      } finally {
+        loading = false;
+      }
+    };
+    void load();
+    const handle = window.setInterval(load, 15_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(handle);
+    };
+  }, [userId]);
+
+  // Your own computers' agents, through your personal room.
+  const personalId = personalRoom?.id;
+  useEffect(() => {
+    const current = useSourceStore.getState().personalRoom;
+    if (!userId || !current) {
+      useSourceStore.getState().upsertSource({ id: 'personal', label: 'Your computers', state: 'stopped' });
+      return;
+    }
+    return attachSource(new RoomSource(current, { id: 'personal', name: '', userId, hasAgent }), { clearOnDetach: true });
+  }, [userId, personalId]);
+
+  // Everyone else's agents from the shared room, once the owner let you in.
+  // Leaving sends them home.
   const member = Boolean(user) && room?.status === 'member';
   const roomId = room?.id;
   useEffect(() => {
     const current = useSourceStore.getState().room;
-    if (!member || !current || !name) {
+    if (!member || !userId || !current || !name) {
       useSourceStore.getState().upsertSource({ id: 'room', label: 'Room', state: 'stopped' });
       return;
     }
-    return attachSource(new RoomSource(current, name), { clearOnDetach: true });
-  }, [member, roomId, name]);
+    return attachSource(new RoomSource(current, { id: 'room', name, userId, hasAgent }), { clearOnDetach: true });
+  }, [member, userId, roomId, name]);
 
   // Membership: notice when the owner lets you in, or removes you.
   useEffect(() => {
@@ -57,7 +125,11 @@ export function useEventSources(): void {
         const current = store.room;
         if (!current || current.id !== roomId) return;
         if (status === null) store.setRoom(null);
-        else if (status !== current.status) store.setRoom({ ...current, status }, { share: status === 'member' });
+        else if (status !== current.status) {
+          store.setRoom({ ...current, status });
+          // You asked to join and the owner let you in: your agents are shared from here on.
+          if (status === 'member') void shareInRoom(roomId, store.shareDetails).catch(() => {});
+        }
       } catch {
         // Offline or signed out: try again next time.
       }
@@ -69,32 +141,4 @@ export function useEventSources(): void {
       window.clearInterval(handle);
     };
   }, [user, roomId, room?.status]);
-
-  // Keep the local bridge in line with what you chose in this page: share
-  // only after you joined (or confirmed resuming) here, stop when you stop,
-  // and keep its short-lived access token fresh. Only the page that started
-  // (or adopted) the sharing stops it: another open tab that isn't sharing
-  // must not switch it off.
-  const bridgeConnected = useSourceStore((s) => s.sources.bridge?.state === 'connected');
-  const bridge = useSourceStore((s) => s.bridgeIdentity);
-  const shareDetails = useSourceStore((s) => s.shareDetails);
-  const sharingWanted = useSourceStore((s) => s.sharingWanted);
-  const sharedFromHere = useRef(false);
-  useEffect(() => {
-    if (!bridgeConnected || !bridge?.cloud) return;
-    const wanted =
-      sharingWanted && member && room && name && accessToken
-        ? { roomId: room.id, code: room.code, roomName: room.name, name, shareDetails, accessToken }
-        : null;
-    if (wanted) {
-      sharedFromHere.current = true;
-      const shared = bridge.room;
-      const inSync = shared?.roomId === wanted.roomId && shared.name === wanted.name && shared.shareDetails === wanted.shareDetails;
-      if (!inSync) void setBridgeRoom(wanted);
-      else void sendBridgeToken(accessToken!);
-    } else if (bridge.room && sharedFromHere.current) {
-      sharedFromHere.current = false;
-      void setBridgeRoom(null);
-    }
-  }, [bridgeConnected, bridge, member, room, name, shareDetails, sharingWanted, accessToken]);
 }

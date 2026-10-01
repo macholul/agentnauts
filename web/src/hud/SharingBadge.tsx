@@ -1,19 +1,17 @@
-import { keyFingerprint } from '@agentnauts/shared';
 import { useSourceStore } from '../sources/sourceStore';
 
-/** Always-visible reminder while your agents are being shared with a room. */
+/** Always-visible reminder while your computers are sending your agents to a shared room. */
 export function SharingBadge() {
-  const bridge = useSourceStore((s) => s.bridgeIdentity);
-  const connected = useSourceStore((s) => s.sources.bridge?.state === 'connected');
-  const room = bridge?.room;
-  if (!connected || !room) return null;
+  const agents = useSourceStore((s) => s.agents);
+  const name = useSourceStore((s) => s.name);
+  const shared = agents.filter((a) => !a.personal);
+  if (shared.length === 0) return null;
+  const rooms = [...new Set(shared.map((a) => a.roomName))];
   return (
     <div className="sharing-badge" role="status">
       <span className="sharing-badge__dot" />
-      Sharing live in <b>{room.roomName}</b> as <b>{room.name}</b>
-      {bridge.identity && <span className="sharing-badge__id">{keyFingerprint(bridge.identity)}</span>}
-      {room.shareDetails && <span className="sharing-badge__warn">+ files &amp; commands</span>}
-      {bridge.needsToken && <span className="sharing-badge__warn">paused: open the app</span>}
+      Sharing live in <b>{rooms.join(', ')}</b> as <b>{name}</b>
+      {shared.some((a) => a.shareDetails) && <span className="sharing-badge__warn">+ files &amp; commands</span>}
     </div>
   );
 }

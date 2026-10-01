@@ -1,51 +1,14 @@
 /**
- * Real events: connects to the agentnauts event bridge (server package) over
- * WebSocket and forwards the normalized AgentEvents it broadcasts.
- * Reconnects with backoff, so the bridge can be started before or after the
+ * Local mode: connects to the agentnauts daemon on this machine over
+ * WebSocket and shows its events directly, with no account and nothing sent
+ * anywhere. Only used when VITE_LOCAL_BRIDGE=1; normally events arrive
+ * through your personal room (see room.ts).
+ * Reconnects with backoff, so the daemon can be started before or after the
  * browser.
  */
-import { BRIDGE_WS_PATH, DEFAULT_BRIDGE_PORT, parseServerMessage, type BridgeRoomRequest } from '@agentnauts/shared';
+import { BRIDGE_WS_PATH, DEFAULT_BRIDGE_PORT, parseServerMessage } from '@agentnauts/shared';
 import { useSourceStore } from './sourceStore';
 import { StatusEmitter, type AgentEventSource, type EventSink, type SourceStatus } from './types';
-
-function bridgeHttpUrl(path: string): URL {
-  const url = new URL(defaultBridgeUrl());
-  url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:';
-  url.pathname = path;
-  return url;
-}
-
-/**
- * Tell the local bridge which room to share this machine's agents in (or
- * null to stop). The request carries a short-lived access token, never the
- * refresh token. The bridge answers with a fresh hello over the WebSocket.
- */
-export async function setBridgeRoom(request: BridgeRoomRequest | null): Promise<boolean> {
-  try {
-    const res = await fetch(bridgeHttpUrl('/room'), {
-      method: request ? 'PUT' : 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      ...(request ? { body: JSON.stringify(request) } : {}),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
-/** Hand the bridge a refreshed access token for the room it's sharing to. */
-export async function sendBridgeToken(accessToken: string): Promise<boolean> {
-  try {
-    const res = await fetch(bridgeHttpUrl('/room/token'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accessToken }),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
 
 /** VITE_BRIDGE_URL overrides the default ws://<page host>:4747/ws. */
 export function defaultBridgeUrl(): string {
@@ -61,7 +24,7 @@ const MAX_RETRY_MS = 10000;
 
 export class BridgeSource implements AgentEventSource {
   readonly id = 'bridge';
-  readonly label = 'Claude Code';
+  readonly label = 'This computer';
   private status = new StatusEmitter();
   private socket: WebSocket | null = null;
   private retryTimer: number | null = null;
@@ -126,14 +89,8 @@ export class BridgeSource implements AgentEventSource {
         return;
       }
       if (parsed.type === 'hello') {
-        const { cloud, room, resumable, needsToken, identity } = parsed;
-        useSourceStore.getState().setBridgeIdentity({
-          cloud: cloud ?? false,
-          ...(room ? { room } : {}),
-          ...(resumable ? { resumable } : {}),
-          ...(needsToken ? { needsToken } : {}),
-          ...(identity ? { identity } : {}),
-        });
+        const { cloud, identity } = parsed;
+        useSourceStore.getState().setBridgeIdentity({ cloud: cloud ?? false, ...(identity ? { identity } : {}) });
       }
       if (parsed.type === 'event') this.sink?.(parsed.event);
     };
@@ -154,7 +111,7 @@ export class BridgeSource implements AgentEventSource {
     this.retryDelay = Math.min(MAX_RETRY_MS, this.retryDelay * 2);
     this.status.set({
       state: 'disconnected',
-      detail: `Bridge not reachable at ${this.url}. Run "npm run server". Retrying in ${Math.round(delay / 1000)}s.`,
+      detail: `Daemon not reachable at ${this.url}. Run "npm run server". Retrying in ${Math.round(delay / 1000)}s.`,
     });
     this.retryTimer = window.setTimeout(() => {
       this.retryTimer = null;
