@@ -10,6 +10,7 @@ import { RadarDish } from './RadarDish';
 import { Scanner } from './Scanner';
 import type { ActivityRef, StationVisualProps } from './parts';
 import { usePadActivity, useStationActivity } from './useStationActivity';
+import { worldSeconds } from '../../world/sync';
 
 /** Visual component per station. Swap these for GLTF-backed ones later. */
 const VISUALS: Record<StationId, ComponentType<StationVisualProps>> = {
@@ -22,9 +23,9 @@ const VISUALS: Record<StationId, ComponentType<StationVisualProps>> = {
 /** Soft pulsing glow on the ground around a busy station. */
 function GroundGlow({ radius, color, activity }: { radius: number; color: string; activity: ActivityRef }) {
   const material = useRef<MeshBasicMaterial>(null);
-  useFrame(({ clock }) => {
+  useFrame(() => {
     const a = activity.current ?? 0;
-    if (material.current) material.current.opacity = a * (0.45 + Math.sin(clock.elapsedTime * 4) * 0.12);
+    if (material.current) material.current.opacity = a * (0.45 + Math.sin(worldSeconds() * 4) * 0.12);
   });
   return (
     <mesh position-y={0.115} rotation-x={-Math.PI / 2}>

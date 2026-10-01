@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import type { Group, MeshStandardMaterial } from 'three';
+import { worldSeconds } from '../../world/sync';
 
 const BUBBLE = '#ffb020';
 
@@ -11,7 +12,7 @@ export function WaitingBubble({ visible }: { visible: boolean }) {
   const ringMat = useRef<MeshStandardMaterial>(null);
   const amount = useRef(0);
 
-  useFrame(({ clock }, delta) => {
+  useFrame((_, delta) => {
     const g = group.current;
     if (!g) return;
     const target = visible ? 1 : 0;
@@ -19,7 +20,7 @@ export function WaitingBubble({ visible }: { visible: boolean }) {
     const a = amount.current;
     g.visible = a > 0.01;
     if (!g.visible) return;
-    const t = clock.elapsedTime;
+    const t = worldSeconds();
     // Overshoot a little when popping in.
     const pop = a * (1 + Math.sin(a * Math.PI) * 0.25) * 1.35;
     g.scale.setScalar(pop);

@@ -5,6 +5,7 @@ import type { Group, Mesh, MeshStandardMaterial } from 'three';
 import { PALETTE } from '../../world/config';
 import { Particles } from '../effects/Particles';
 import { AccentMaterial, Antenna, BodyMaterial, Button, DarkMaterial, Foundation, type StationVisualProps } from './parts';
+import { worldSeconds } from '../../world/sync';
 
 /**
  * Fabricator (file edits / writes): a chunky 3D printer. When busy, the print
@@ -15,18 +16,19 @@ export function Fabricator({ accent, activity }: StationVisualProps) {
   const nozzle = useRef<MeshStandardMaterial>(null);
   const screen = useRef<MeshStandardMaterial>(null);
   const printed = useRef<Mesh>(null);
-  const phase = useRef(0);
+  // Start from the shared clock so the idle carriage lines up across browsers.
+  const phase = useRef(worldSeconds() * 0.5);
   const progress = useRef(0.6);
 
-  useFrame(({ clock }, delta) => {
+  useFrame((_, delta) => {
     const a = activity.current ?? 0;
     phase.current += delta * (0.5 + a * 5);
     if (carriage.current) {
       carriage.current.position.x = Math.sin(phase.current) * (0.12 + a * 0.45);
       carriage.current.position.z = Math.cos(phase.current * 0.7) * a * 0.18;
     }
-    if (nozzle.current) nozzle.current.emissiveIntensity = 0.3 + a * (2.2 + Math.sin(clock.elapsedTime * 30) * 0.6);
-    if (screen.current) screen.current.emissiveIntensity = 0.35 + a * (0.9 + Math.sin(clock.elapsedTime * 6) * 0.25);
+    if (nozzle.current) nozzle.current.emissiveIntensity = 0.3 + a * (2.2 + Math.sin(worldSeconds() * 30) * 0.6);
+    if (screen.current) screen.current.emissiveIntensity = 0.35 + a * (0.9 + Math.sin(worldSeconds() * 6) * 0.25);
     // Print progress loops while working, rests when idle.
     if (a > 0.3) progress.current = (progress.current + delta * 0.35) % 1;
     const p = a > 0.3 ? 0.15 + progress.current * 0.85 : 0.6;

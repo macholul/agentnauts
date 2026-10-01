@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { Color, IcosahedronGeometry, Vector3, type BufferGeometry, type Group } from 'three';
 import { DECORATIONS, type DecorationConfig } from '../../world/config';
 import { terrainHeight } from '../../world/terrain';
+import { worldSeconds } from '../../world/sync';
 
 /** Deterministic random stream for one prop. */
 function rng(seed: number): () => number {
@@ -226,9 +227,9 @@ const PLANTS = [BulbPlant, FanPlant, StalkPlant, PodPlant];
 function Plant({ config }: { config: DecorationConfig }) {
   const sway = useRef<Group>(null);
   const phase = config.seed % 100;
-  useFrame(({ clock }) => {
+  useFrame(() => {
     if (!sway.current) return;
-    const t = clock.elapsedTime + phase;
+    const t = worldSeconds() + phase;
     sway.current.rotation.z = Math.sin(t * 1.1) * 0.07;
     sway.current.rotation.x = Math.cos(t * 0.9) * 0.05;
   });

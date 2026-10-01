@@ -5,6 +5,7 @@ import { AdditiveBlending, type Group, type Mesh, type MeshBasicMaterial, type M
 import { PALETTE } from '../../world/config';
 import { Particles } from '../effects/Particles';
 import { AccentMaterial, BodyMaterial, Button, DarkMaterial, Foundation, type StationVisualProps } from './parts';
+import { worldSeconds, oscillate } from '../../world/sync';
 
 /**
  * Scanner (read / search files): an arch with a scan head beaming down at a
@@ -18,11 +19,11 @@ export function Scanner({ accent, activity }: StationVisualProps) {
   const platformGlow = useRef<MeshStandardMaterial>(null);
   const head = useRef<Group>(null);
 
-  useFrame(({ clock }, delta) => {
+  useFrame((_, delta) => {
     const a = activity.current ?? 0;
-    const t = clock.elapsedTime;
+    const t = worldSeconds();
     if (cube.current) {
-      cube.current.position.y = 0.95 + Math.sin(t * (1.5 + a * 2)) * 0.06;
+      cube.current.position.y = 0.95 + oscillate(t, 1.5, 3.5, a) * 0.06;
       cube.current.rotation.y += delta * (0.4 + a * 3);
       cube.current.rotation.x += delta * (0.2 + a * 1.5);
     }
@@ -33,7 +34,7 @@ export function Scanner({ accent, activity }: StationVisualProps) {
     if (beam.current) beam.current.opacity = 0.04 + a * (0.3 + Math.sin(t * 12) * 0.08);
     if (beamMesh.current) beamMesh.current.scale.setScalar(0.9 + a * 0.1 + Math.sin(t * 4) * 0.03 * a);
     if (platformGlow.current) platformGlow.current.emissiveIntensity = 0.4 + a * (1.4 + Math.sin(t * 8) * 0.4);
-    if (head.current) head.current.rotation.y = Math.sin(t * (0.5 + a * 3)) * (0.2 + a * 0.4);
+    if (head.current) head.current.rotation.y = oscillate(t, 0.5, 3.5, a) * (0.2 + a * 0.4);
   });
 
   return (
