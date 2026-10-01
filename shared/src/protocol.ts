@@ -132,9 +132,13 @@ export function generateRoomCode(randomValues: (count: number) => ArrayLike<numb
   return `crew-${chars.slice(0, 4)}-${chars.slice(4, 8)}-${chars.slice(8)}`;
 }
 
-/** Tolerate pasted codes with stray spaces or capitals. */
+/**
+ * Tolerate pasted codes with stray spaces or capitals, and pull the code out
+ * of a pasted invite link (`http://localhost:5173/?room=crew-…`).
+ */
 export function normalizeRoomCode(input: string): string {
-  return input.trim().toLowerCase();
+  const lower = input.trim().toLowerCase();
+  return lower.match(/crew(-[a-z0-9]{4}){3}/)?.[0] ?? lower;
 }
 
 /** Display names: trimmed, single-line, short. */

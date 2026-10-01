@@ -7,6 +7,7 @@ import { webcrypto } from 'node:crypto';
 import {
   generateRoomCode,
   isValidRoomCode,
+  normalizeRoomCode,
   keyFingerprint,
   parseBridgeRoomRequest,
   verifyRoomEnvelope,
@@ -47,6 +48,12 @@ describe('room codes', () => {
     for (let i = 0; i < 50; i++) assert.ok(isValidRoomCode(code()));
     for (const bad of ['team-1', 'crew-abcd-efgh', 'crew-ABCD-efgh-jkmn', 'crew-abcd-efgh-jkm0', 'my-cool-room-123']) {
       assert.ok(!isValidRoomCode(bad), bad);
+    }
+  });
+
+  it('takes a code out of a pasted invite link', () => {
+    for (const pasted of [' CREW-9nu3-98ph-772x ', 'http://localhost:5173/?room=crew-9nu3-98ph-772x', 'localhost:5174/?room=crew-9nu3-98ph-772x&x=1']) {
+      assert.equal(normalizeRoomCode(pasted), 'crew-9nu3-98ph-772x', pasted);
     }
   });
 });
