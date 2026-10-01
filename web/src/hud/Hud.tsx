@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { STATION_IDS } from '@groundcrew/shared';
+import { STATION_IDS } from '@agentnauts/shared';
 import { useAgentStore, type Agent } from '../store/agentStore';
 import { useSourceStore, type SourceInfo } from '../sources/sourceStore';
 import { STATIONS } from '../world/config';
@@ -105,7 +105,7 @@ export function Hud() {
       <header className="hud-header">
         <button className="hud-title" onClick={() => setCollapsed((c) => !c)} aria-expanded={!collapsed}>
           <span className="hud-logo" aria-hidden />
-          groundcrew
+          agentnauts
           {waiting > 0 && <span className="hud-badge">{waiting}</span>}
           <span className="hud-chevron" aria-hidden>
             {collapsed ? '▸' : '▾'}

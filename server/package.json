@@ -1,5 +1,5 @@
 {
-  "name": "@groundcrew/server",
+  "name": "@agentnauts/server",
   "version": "0.1.0",
   "private": true,
   "description": "Event bridge: receives Claude Code hook payloads over HTTP and broadcasts normalized AgentEvents over WebSocket.",
@@ -12,7 +12,7 @@
     "test": "tsx --test src/*.test.ts"
   },
   "dependencies": {
-    "@groundcrew/shared": "0.1.0",
+    "@agentnauts/shared": "0.1.0",
     "@supabase/supabase-js": "^2.117.2",
     "ws": "^8.22.0"
   },

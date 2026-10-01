@@ -1,10 +1,10 @@
 /**
- * Real events: connects to the groundcrew event bridge (server package) over
+ * Real events: connects to the agentnauts event bridge (server package) over
  * WebSocket and forwards the normalized AgentEvents it broadcasts.
  * Reconnects with backoff, so the bridge can be started before or after the
  * browser.
  */
-import { BRIDGE_WS_PATH, DEFAULT_BRIDGE_PORT, parseServerMessage, type BridgeRoomRequest } from '@groundcrew/shared';
+import { BRIDGE_WS_PATH, DEFAULT_BRIDGE_PORT, parseServerMessage, type BridgeRoomRequest } from '@agentnauts/shared';
 import { useSourceStore } from './sourceStore';
 import { StatusEmitter, type AgentEventSource, type EventSink, type SourceStatus } from './types';
 

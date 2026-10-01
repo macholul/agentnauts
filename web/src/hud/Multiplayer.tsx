@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { isValidRoomCode, keyFingerprint, normalizeRoomCode } from '@groundcrew/shared';
+import { isValidRoomCode, keyFingerprint, normalizeRoomCode } from '@agentnauts/shared';
 import { setBridgeRoom } from '../sources/bridge';
 import {
   approveMember,
@@ -58,7 +58,7 @@ function useAction() {
 /**
  * Sign in by email, no password. The email has a sign-in link (and a code
  * too, if the Supabase email template includes one); clicking the link signs
- * this browser in and every open groundcrew tab updates by itself.
+ * this browser in and every open agentnauts tab updates by itself.
  */
 function SignIn() {
   const [email, setEmail] = useState('');

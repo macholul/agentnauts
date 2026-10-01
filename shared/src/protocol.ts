@@ -13,7 +13,7 @@ export type ServerMessage =
    */
   | {
       type: 'hello';
-      server: 'groundcrew';
+      server: 'agentnauts';
       version: string;
       /** Whether this build has a multiplayer (Supabase) project configured. */
       cloud?: boolean;
@@ -85,7 +85,7 @@ export function parseServerMessage(raw: string): ServerMessage | null {
   if (msg.type === 'hello' && typeof msg.version === 'string') {
     return {
       type: 'hello',
-      server: 'groundcrew',
+      server: 'agentnauts',
       version: msg.version,
       ...(typeof msg.cloud === 'boolean' ? { cloud: msg.cloud } : {}),
       ...(parseBridgeRoom(msg.room) ? { room: parseBridgeRoom(msg.room)! } : {}),
@@ -109,7 +109,7 @@ export const ROOM_EVENT = 'agent_event';
 
 /** Realtime channel name for a room (by id; access rules match on it). */
 export function roomTopic(roomId: string): string {
-  return `groundcrew:${roomId}`;
+  return `agentnauts:${roomId}`;
 }
 
 /** Characters used in room codes: no 0/o, 1/l/i to keep them easy to read aloud. */

@@ -1,5 +1,5 @@
 {
-  "name": "@groundcrew/web",
+  "name": "@agentnauts/web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@groundcrew/shared": "0.1.0",
+    "@agentnauts/shared": "0.1.0",
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.1",
     "@supabase/supabase-js": "^2.117.2",

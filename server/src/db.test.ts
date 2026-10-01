@@ -83,7 +83,7 @@ describe('private rooms migration', () => {
     await rejects(as(OWNER, `select public.create_room('my-room', 'Base', 'Olive')`), /check constraint|violates/);
     const [room] = await as<{ id: string }>(OWNER, `select (public.create_room($1, 'Base', 'Olive')).id`, [CODE]);
     roomId = room!.id;
-    topic = `groundcrew:${roomId}`;
+    topic = `agentnauts:${roomId}`;
     assert.deepEqual(await channelAccess(OWNER, topic), { receive: true, send: true });
   });
 
@@ -124,7 +124,7 @@ describe('private rooms migration', () => {
     assert.equal(forFriend.length, 2);
     assert.ok(forFriend.every((m) => m.email === null));
     // Membership doesn't leak into other channels.
-    const other = 'groundcrew:44444444-4444-4444-8444-444444444444';
+    const other = 'agentnauts:44444444-4444-4444-8444-444444444444';
     assert.deepEqual(await channelAccess(FRIEND, other), { receive: false, send: false });
     assert.deepEqual(await channelAccess(FRIEND, 'someone-elses-topic'), { receive: false, send: false });
   });

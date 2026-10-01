@@ -14,7 +14,7 @@ import {
   type Intent,
   type IntentKind,
   type StationId,
-} from '@groundcrew/shared';
+} from '@agentnauts/shared';
 import { LANDING_PAD, STATIONS, type Vec3 } from '../world/config';
 import { randomPointNear, randomWanderPoint } from '../world/navigation';
 import { hashString, seededRandom, syncKey } from '../world/sync';

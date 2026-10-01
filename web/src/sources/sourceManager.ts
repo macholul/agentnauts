@@ -2,7 +2,7 @@
  * Connects AgentEventSources to the agent store. This is the only place that
  * knows both about sources and about the store.
  */
-import type { AgentEvent } from '@groundcrew/shared';
+import type { AgentEvent } from '@agentnauts/shared';
 import { useAgentStore } from '../store/agentStore';
 import { useSourceStore } from './sourceStore';
 import type { AgentEventSource } from './types';

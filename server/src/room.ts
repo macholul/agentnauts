@@ -29,7 +29,7 @@ import {
   type CloudSettings,
   type RoomEnvelope,
   type SignedRoomContent,
-} from '@groundcrew/shared';
+} from '@agentnauts/shared';
 import type { Identity } from './identity';
 
 /**
@@ -74,7 +74,7 @@ export function tokenSecondsLeft(token: string, now = Date.now()): number {
   }
 }
 
-export const ROOM_FILE = join(homedir(), '.groundcrew', 'room.json');
+export const ROOM_FILE = join(homedir(), '.agentnauts', 'room.json');
 
 function loadSavedRoom(file: string): BridgeRoom | null {
   try {
@@ -194,7 +194,7 @@ export class RoomManager {
     const room = this.current;
     if (!room || !this.cloud) return;
     if (this.needsToken) {
-      this.fail('access token expired; open the groundcrew app to keep sharing');
+      this.fail('access token expired; open the agentnauts app to keep sharing');
       return;
     }
     if (!this.supabase) {

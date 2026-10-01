@@ -5,7 +5,7 @@
  */
 import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js';
 import { create } from 'zustand';
-import { resolveCloud } from '@groundcrew/shared';
+import { resolveCloud } from '@agentnauts/shared';
 
 export interface CloudUser {
   id: string;
@@ -39,7 +39,7 @@ export function getSupabase(): SupabaseClient | null {
     return null;
   }
   client = createClient(cloud.url, cloud.key, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'groundcrew.auth' },
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'agentnauts.auth' },
   });
   useAuthStore.setState({ available: true });
   const apply = (session: Session | null) => {

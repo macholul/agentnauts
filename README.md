@@ -1,4 +1,4 @@
-# groundcrew
+# agentnauts
 
 A cartoon 3D visualizer for AI coding agents. Every Claude Code session becomes a
 little astronaut working on a base on an alien planet, seen from above: it walks to the
@@ -10,7 +10,7 @@ Subagents drop in as smaller crew astronauts and fly off when they're done.
 Inspired by Pixel Agents, but in 3D, with a soft pastel, Astroneer-like toy
 style (all art is original, built from primitives).
 
-![groundcrew screenshot](docs/screenshot.jpg)
+![agentnauts screenshot](docs/screenshot.jpg)
 
 ## Quick start
 
@@ -308,7 +308,7 @@ The access rules are tested against a real Postgres in `server/src/db.test.ts`
   names, files & commands** to include them. Code, prompts and Claude's replies
   are never sent.
 - *Nobody can pose as you.* Each bridge creates an Ed25519 key pair once
-  (`~/.groundcrew/identity.json`, readable only by you) and signs every event;
+  (`~/.agentnauts/identity.json`, readable only by you) and signs every event;
   browsers drop anything with a bad signature, and signed messages can't be
   replayed into another room. Your short ID (e.g. `✓ a3f9-c21e`) is shown in
   the panel so teammates can recognise the real you.
@@ -320,7 +320,7 @@ The access rules are tested against a real Postgres in `server/src/db.test.ts`
 | `PORT`             | server | `4747`                | Bridge port (update the hook URL and `VITE_BRIDGE_URL` too) |
 | `HOST`             | server | `127.0.0.1`           | Bind address. Use `0.0.0.0` to open it to your LAN        |
 | `ALLOWED_ORIGINS`  | server | localhost pages only  | Extra browser origins allowed to connect, comma separated |
-| `GROUNDCREW_QUIET` | server | unset                 | `1` silences per-event logging                            |
+| `AGENTNAUTS_QUIET` | server | unset                 | `1` silences per-event logging                            |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | server | `shared/src/cloud.ts` | Use a different Supabase project |
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | web | `shared/src/cloud.ts` | Use a different Supabase project |
 | `VITE_BRIDGE_URL`  | web    | `ws://<page host>:4747/ws` | Where the browser connects                           |

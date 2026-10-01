@@ -1,6 +1,6 @@
 /**
  * The one Supabase project that relays multiplayer rooms for everyone using
- * this build of groundcrew. The maintainer fills this in once
+ * this build of agentnauts. The maintainer fills this in once
  * (Supabase dashboard → Project Settings → API); users never touch it.
  *
  * The anon / publishable key is designed to be public, so committing it is

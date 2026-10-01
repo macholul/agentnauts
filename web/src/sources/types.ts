@@ -4,7 +4,7 @@
  * Realtime for multiplayer) means implementing this interface and
  * registering it; nothing else changes.
  */
-import type { AgentEvent } from '@groundcrew/shared';
+import type { AgentEvent } from '@agentnauts/shared';
 
 export type EventSink = (event: AgentEvent) => void;
 

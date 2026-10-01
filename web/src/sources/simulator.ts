@@ -4,7 +4,7 @@
  * then launches subagents, asks for permission, or ends and restarts a
  * session.
  */
-import { makeId, type AgentEvent, type AgentEventType } from '@groundcrew/shared';
+import { makeId, type AgentEvent, type AgentEventType } from '@agentnauts/shared';
 import { StatusEmitter, type AgentEventSource, type EventSink, type SourceStatus } from './types';
 
 const FILES = [

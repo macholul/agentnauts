@@ -15,7 +15,7 @@ import {
   roomTopic,
   verifyRoomEnvelope,
   type AgentEvent,
-} from '@groundcrew/shared';
+} from '@agentnauts/shared';
 import type { JoinedRoom } from './roomsApi';
 import { useSourceStore, type Roommate } from './sourceStore';
 import { getSupabase } from './supabase';

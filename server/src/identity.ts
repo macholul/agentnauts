@@ -1,6 +1,6 @@
 /**
  * This machine's multiplayer identity: an Ed25519 key pair created on first
- * use and kept in ~/.groundcrew/identity.json (readable only by you). The
+ * use and kept in ~/.agentnauts/identity.json (readable only by you). The
  * public key is your ID in rooms; the private key never leaves this machine.
  */
 import { createPrivateKey, generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
@@ -8,7 +8,7 @@ import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-export const IDENTITY_FILE = join(homedir(), '.groundcrew', 'identity.json');
+export const IDENTITY_FILE = join(homedir(), '.agentnauts', 'identity.json');
 
 export interface Identity {
   /** Ed25519 public key, base64url (43 chars). */

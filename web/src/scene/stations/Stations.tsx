@@ -1,7 +1,7 @@
 import { useRef, type ComponentType } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { AdditiveBlending, type MeshBasicMaterial } from 'three';
-import type { StationId } from '@groundcrew/shared';
+import type { StationId } from '@agentnauts/shared';
 import { LANDING_PAD, PAD_SCALE, STATION_SCALE, STATIONS, type StationConfig } from '../../world/config';
 import { Drill } from './Drill';
 import { Fabricator } from './Fabricator';

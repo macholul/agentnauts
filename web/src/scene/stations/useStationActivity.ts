@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import type { StationId } from '@groundcrew/shared';
+import type { StationId } from '@agentnauts/shared';
 import { useAgentStore, type Agent } from '../../store/agentStore';
 
 /**

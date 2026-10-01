@@ -5,7 +5,7 @@
  * Only a short `detail` (file name, command, query) is extracted from tool
  * input; the full input/output never leaves this function.
  */
-import { SUBAGENT_TOOLS, makeId, type AgentEvent, type AgentEventType, type SubagentInfo } from '@groundcrew/shared';
+import { SUBAGENT_TOOLS, makeId, type AgentEvent, type AgentEventType, type SubagentInfo } from '@agentnauts/shared';
 
 export interface NormalizeResult {
   events: AgentEvent[];

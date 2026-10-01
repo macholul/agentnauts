@@ -13,7 +13,7 @@ import {
   verifyRoomEnvelope,
   type AgentEvent,
   type BridgeRoom,
-} from '@groundcrew/shared';
+} from '@agentnauts/shared';
 import { loadOrCreateIdentity } from './identity';
 import { ProjectAliases, RoomManager, signRoomContent, toRoomContent, tokenSecondsLeft } from './room';
 

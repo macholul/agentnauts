@@ -11,7 +11,7 @@
  * The default camera looks from +X/+Z toward the origin, so on screen
  * "right" is +X/-Z and "far" is -X/-Z.
  */
-import type { StationId } from '@groundcrew/shared';
+import type { StationId } from '@agentnauts/shared';
 
 export type Vec3 = [number, number, number];
 

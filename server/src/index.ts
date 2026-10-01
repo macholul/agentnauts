@@ -1,5 +1,5 @@
 /**
- * groundcrew event bridge.
+ * agentnauts event bridge.
  *
  *   POST /event   Claude Code hook JSON (stdin of the hook, forwarded by curl)
  *   GET  /health  liveness + connected browser count
@@ -15,7 +15,7 @@ import {
   parseBridgeRoomRequest,
   type AgentEvent,
   type ServerMessage,
-} from '@groundcrew/shared';
+} from '@agentnauts/shared';
 import { normalizeHookPayload } from './normalize';
 import { isAllowedOrigin } from './origin';
 import { loadOrCreateIdentity } from './identity';
@@ -33,7 +33,7 @@ const PORT = Number(process.env.PORT ?? DEFAULT_BRIDGE_PORT);
 // Loopback only by default: events include file names and commands.
 const HOST = process.env.HOST ?? '127.0.0.1';
 const MAX_BODY_BYTES = 20 * 1024 * 1024;
-const QUIET = process.env.GROUNDCREW_QUIET === '1';
+const QUIET = process.env.AGENTNAUTS_QUIET === '1';
 
 const extraOrigins = (process.env.ALLOWED_ORIGINS ?? '')
   .split(',')
@@ -110,7 +110,7 @@ function helloMessage(): ServerMessage {
   const room = rooms.current;
   return {
     type: 'hello',
-    server: 'groundcrew',
+    server: 'agentnauts',
     version: VERSION,
     cloud: rooms.cloud !== null,
     ...(rooms.cloud ? { identity: rooms.identity.publicKey } : {}),
@@ -284,7 +284,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && url.pathname === '/') {
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end(
-      `groundcrew event bridge ${VERSION}\n\n` +
+      `agentnauts event bridge ${VERSION}\n\n` +
         `POST /event   Claude Code hook JSON\n` +
         `GET  /health  status\n` +
         `PUT  /room    share this machine's agents in a multiplayer room (DELETE to stop)\n` +
@@ -310,27 +310,27 @@ server.on('upgrade', (req, socket, head) => {
 
 server.on('error', (error: NodeJS.ErrnoException) => {
   if (error.code === 'EADDRINUSE') {
-    console.error(`[groundcrew] port ${PORT} is already in use. Is another bridge running? Set PORT to change it.`);
+    console.error(`[agentnauts] port ${PORT} is already in use. Is another bridge running? Set PORT to change it.`);
   } else {
-    console.error('[groundcrew] server error:', error);
+    console.error('[agentnauts] server error:', error);
   }
   process.exit(1);
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`[groundcrew] event bridge listening on http://${HOST === '::' ? 'localhost' : HOST}:${PORT}`);
-  console.log(`[groundcrew]   hooks  → POST http://localhost:${PORT}/event`);
-  console.log(`[groundcrew]   browser ← ws://localhost:${PORT}${BRIDGE_WS_PATH}`);
+  console.log(`[agentnauts] event bridge listening on http://${HOST === '::' ? 'localhost' : HOST}:${PORT}`);
+  console.log(`[agentnauts]   hooks  → POST http://localhost:${PORT}/event`);
+  console.log(`[agentnauts]   browser ← ws://localhost:${PORT}${BRIDGE_WS_PATH}`);
   const room = rooms.current;
   if (room) {
     console.log(
-      `[groundcrew]   room   → SHARING as "${room.name}" in room "${room.roomName}"` +
+      `[agentnauts]   room   → SHARING as "${room.name}" in room "${room.roomName}"` +
         (room.shareDetails ? ' (with project names, files and commands)' : ' (tool names only)'),
     );
   } else if (rooms.resumable) {
-    console.log(`[groundcrew]   room   → not sharing; open the web app to resume room "${rooms.resumable.roomName}"`);
+    console.log(`[agentnauts]   room   → not sharing; open the web app to resume room "${rooms.resumable.roomName}"`);
   } else if (!rooms.cloud) {
-    console.log('[groundcrew]   room   → multiplayer not configured (see shared/src/cloud.ts)');
+    console.log('[agentnauts]   room   → multiplayer not configured (see shared/src/cloud.ts)');
   }
 });
 

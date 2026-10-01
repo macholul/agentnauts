@@ -6,7 +6,7 @@ import { isAllowedOrigin } from './origin';
 const base = {
   session_id: 'abc123',
   transcript_path: '/tmp/t.jsonl',
-  cwd: '/home/me/projects/groundcrew',
+  cwd: '/home/me/projects/agentnauts',
   permission_mode: 'default',
 };
 
@@ -16,7 +16,7 @@ describe('normalizeHookPayload', () => {
       ...base,
       hook_event_name: 'PreToolUse',
       tool_name: 'Edit',
-      tool_input: { file_path: '/home/me/projects/groundcrew/web/src/App.tsx', old_string: 'a', new_string: 'b' },
+      tool_input: { file_path: '/home/me/projects/agentnauts/web/src/App.tsx', old_string: 'a', new_string: 'b' },
       tool_use_id: 'toolu_1',
     });
     assert.equal(warning, undefined);
@@ -26,7 +26,7 @@ describe('normalizeHookPayload', () => {
     assert.equal(event?.toolName, 'Edit');
     assert.equal(event?.detail, 'App.tsx');
     assert.equal(event?.sessionId, 'abc123');
-    assert.equal(event?.sessionName, 'groundcrew');
+    assert.equal(event?.sessionName, 'agentnauts');
     assert.equal(event?.subagent, undefined);
   });
 

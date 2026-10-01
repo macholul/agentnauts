@@ -1,4 +1,4 @@
-import { keyFingerprint } from '@groundcrew/shared';
+import { keyFingerprint } from '@agentnauts/shared';
 import { useSourceStore } from '../sources/sourceStore';
 
 /** Always-visible reminder while your agents are being shared with a room. */

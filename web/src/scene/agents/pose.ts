@@ -4,7 +4,7 @@
  * animates however it likes. A future GLTF astronaut only needs to map these
  * modes to animation clips.
  */
-import type { StationId } from '@groundcrew/shared';
+import type { StationId } from '@agentnauts/shared';
 
 export type PoseMode = 'idle' | 'walk' | 'work' | 'wait' | 'fly';
 

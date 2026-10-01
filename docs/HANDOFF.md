@@ -1,4 +1,7 @@
-# groundcrew: handoff notes
+# agentnauts: handoff notes
+
+Renamed from groundcrew on 2026-10-01 (the name was taken on npm). The
+GitHub repo and the local folder may still carry the old name.
 
 Context for the next Claude Code session (the previous one ran in the cloud
 and ended here). Branch: `claude/optimistic-rubin-lyogwk` on
@@ -36,10 +39,10 @@ agents) is on by default in dev; toggle in the HUD.
   (`verify.ts`), Supabase project URL/anon key (`cloud.ts`).
 - `server/` (event bridge, plain `node:http` + `ws`): `normalize.ts` (hook JSON
   → AgentEvent), `origin.ts` (localhost-only browser origins),
-  `identity.ts` (Ed25519 key in `~/.groundcrew/identity.json`), `room.ts`
+  `identity.ts` (Ed25519 key in `~/.agentnauts/identity.json`), `room.ts`
   (RoomManager: shares to a Supabase private channel with a short-lived
   access token handed over by the web app; room remembered in
-  `~/.groundcrew/room.json`, never auto-resumed), `index.ts` (routes:
+  `~/.agentnauts/room.json`, never auto-resumed), `index.ts` (routes:
   `POST /event`, `GET /health`, `GET|PUT|DELETE /room`, `POST /room/token`,
   `WS /ws`).
 - `web/` (Vite + React 19 + three + R3F + drei + zustand):
@@ -70,7 +73,7 @@ agents) is on by default in dev; toggle in the HUD.
 - Sign in with Supabase email magic link (implicit flow; default email, no
   SMTP needed). A code field exists for when a template has `{{ .Token }}`.
 - Owner creates a room; others ask with the code/invite link; owner lets in /
-  denies / removes. Channel `groundcrew:<room uuid>`, `private: true`; RLS
+  denies / removes. Channel `agentnauts:<room uuid>`, `private: true`; RLS
   only lets approved members send/receive.
 - Bridge gets only the access token (memory), never the refresh token; web
   pushes refreshed tokens. Sharing pauses ~1h after the app is closed.
@@ -124,7 +127,7 @@ bridge reads the generic `PORT` variable, which some launchers set.
 
 ## Testing tips
 
-- Dev-only store handle: `window.__groundcrew.store` (inject events with
+- Dev-only store handle: `window.__agentnauts.store` (inject events with
   `applyEvent`, or set agent state directly for screenshots).
 - Headless Chromium (Playwright) works with
   `--use-angle=swiftshader --enable-unsafe-swiftshader`, but is slow; place

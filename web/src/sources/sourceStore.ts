@@ -3,7 +3,7 @@
  * simulator toggle. The sources themselves live in sourceManager.ts.
  */
 import { create } from 'zustand';
-import { cleanName, isUuid, isValidRoomCode, keyFingerprint, normalizeRoomCode, type BridgeRoom } from '@groundcrew/shared';
+import { cleanName, isUuid, isValidRoomCode, keyFingerprint, normalizeRoomCode, type BridgeRoom } from '@agentnauts/shared';
 import type { JoinedRoom } from './roomsApi';
 import type { SourceState } from './types';
 
@@ -16,10 +16,10 @@ export interface SourceInfo {
   lastEventAt: number | null;
 }
 
-const SIMULATOR_KEY = 'groundcrew.simulator';
-const ROOM_KEY = 'groundcrew.room';
-const NAME_KEY = 'groundcrew.name';
-const DETAILS_KEY = 'groundcrew.shareDetails';
+const SIMULATOR_KEY = 'agentnauts.simulator';
+const ROOM_KEY = 'agentnauts.room';
+const NAME_KEY = 'agentnauts.name';
+const DETAILS_KEY = 'agentnauts.shareDetails';
 
 function readStorage(key: string): string | null {
   try {

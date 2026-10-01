@@ -2,7 +2,7 @@
  * Private-room operations. All of them run as the signed-in user; the
  * database (supabase/migrations) decides what that user may do.
  */
-import { generateRoomCode } from '@groundcrew/shared';
+import { generateRoomCode } from '@agentnauts/shared';
 import { getSupabase } from './supabase';
 
 export interface JoinedRoom {

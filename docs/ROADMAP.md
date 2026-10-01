@@ -2,11 +2,11 @@
 
 ## Context
 
-groundcrew works end to end, but only on one machine: the web app runs on
-`localhost:5173`, the bridge on `localhost:4747`, hooks are pasted into
-`~/.claude/settings.json` by hand, and a browser page hands the bridge its
-sign-in token. To be a real product it needs a hosted web app anyone can open,
-and a one-command way to connect Claude Code sessions to it.
+The app (then called groundcrew) works end to end, but only on one machine:
+the web app runs on `localhost:5173`, the bridge on `localhost:4747`, hooks
+are pasted into `~/.claude/settings.json` by hand, and a browser page hands
+the bridge its sign-in token. To be a real product it needs a hosted web app
+anyone can open, and a one-command way to connect Claude Code sessions to it.
 
 Decisions made with the user:
 
@@ -19,8 +19,9 @@ Decisions made with the user:
   row, without touching the person's account or other rooms.
 - **Free and open source at launch.** No billing.
 - **Sign-in (web app only): GitHub, plus email link** as fallback.
-- **Rename before launch.** `groundcrew` is taken on npm, and `groundcrew-cli`
-  is an existing tool for monitoring Copilot agents.
+- **New name: agentnauts.** `groundcrew` is taken on npm, and `groundcrew-cli`
+  is an existing tool for monitoring Copilot agents. `agentnauts` was free on
+  npm when chosen (2026-10-01).
 
 ## Target shape
 
@@ -84,8 +85,7 @@ anything is published.
 
 ### Phase 0: Groundwork (small)
 
-- Pick the new name: I bring a shortlist with npm package, domain and GitHub
-  name all free; the user picks.
+- Pick the new name (done: agentnauts) and rename the code in one pass.
 - Add a LICENSE (MIT). Set GitHub's default branch to `main`.
 - CI on GitHub Actions: typecheck, test, build on every push.
 - Keep the current Supabase project for development; create a second one for
@@ -208,9 +208,8 @@ is a selling point at launch.
   review. It must only ever issue send-only tokens for a live agent row.
 - **Realtime quotas** on the free tier: one copy of each event per connected
   room. Measured in Phase 4.
-- **Rename churn**: package names, `~/.groundcrew`, the `groundcrew:` channel
-  prefix parsed by `topic_room_id()` in the migration, `shared/src/cloud.ts`.
-  Doing it in Phase 0 keeps it to one pass.
+- **Name not reserved yet**: the npm package, the domain and the GitHub repo
+  name are only free, not taken by us, until someone registers them.
 - **Old tool, new site**: handled by the protocol version from Phase 1.
 
 ## Verification

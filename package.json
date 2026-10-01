@@ -1,5 +1,5 @@
 {
-  "name": "groundcrew",
+  "name": "agentnauts-monorepo",
   "private": true,
   "version": "0.1.0",
   "description": "A cartoon 3D visualizer for AI coding agents: little astronauts working on a floating chunk of alien planet.",

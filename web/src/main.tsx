@@ -7,11 +7,11 @@ import './index.css';
 declare global {
   interface Window {
     /** Dev-only handle for poking at the store from the console. */
-    __groundcrew?: { store: typeof useAgentStore };
+    __agentnauts?: { store: typeof useAgentStore };
   }
 }
 
-if (import.meta.env.DEV) window.__groundcrew = { store: useAgentStore };
+if (import.meta.env.DEV) window.__agentnauts = { store: useAgentStore };
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing #root element');
