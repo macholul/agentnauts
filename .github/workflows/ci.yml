@@ -7,10 +7,15 @@ on:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    # The npm tool runs on people's own computers, so all three systems count.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -18,3 +23,5 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      # Packs the npm package, installs it in an empty project and runs it.
+      - run: npm run smoke -w server
