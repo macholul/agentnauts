@@ -156,17 +156,24 @@ See `docs/ROADMAP.md` for the plan. What changed from the notes below:
 - When trying commands by hand, set `HOME` to a scratch folder: `hooks
   install`, `disconnect` and `uninstall` act on the real settings file and
   the real key otherwise.
-- Not done: releasing to npm (waits for the hosted app, since
-  `CLOUD.appUrl` is still `http://localhost:5173`), and a person trying it on
-  Windows.
-- Hosting is prepared, not done: `vercel.json` (repo root) builds
-  `web/dist` on Vercel with no dashboard settings, forbids showing the app
-  inside another site's frame (the Connect button registers a computer, so
-  it must not be clickable through a disguised page) and caches the hashed
-  assets. When the app has an address, put it in `CLOUD.appUrl`
-  (`shared/src/cloud.ts`) and in Supabase's Site URL and Redirect URLs. Run
+- Not done: releasing to npm, and a person trying it on Windows. On Windows
+  CI the hook command works through Git Bash; with the daemon stopped it
+  costs about half a second per hook there (its connect time limit), against
+  a few milliseconds on macOS and Linux.
+- Hosting (2026-10-02): the web app is live at
+  `https://agentnauts.vercel.app`. It is the Vercel project `agentnauts` in
+  the maintainer's Hobby account, linked to `macholul/agentnauts`, so every
+  push to `main` redeploys production. `vercel.json` (repo root) builds
+  `web/dist` with no dashboard settings, forbids showing the app inside
+  another site's frame (the Connect button registers a computer, so it must
+  not be clickable through a disguised page) and caches the hashed assets.
+  Only the production address is public; per-deployment addresses ask for a
+  Vercel login. `CLOUD.appUrl` (`shared/src/cloud.ts`) is that address; run
   from source, the daemon keeps linking to `http://localhost:5173`
   (`readSettings(env, fromSource)` in `server/src/config.ts`).
+- Not done for hosting: Supabase's Site URL and Redirect URLs still need
+  the hosted address (dashboard only, Authentication → URL Configuration).
+  Until then a sign-in started on the hosted app comes back to localhost.
 
 ## Status: verified live (2026-10-01)
 

@@ -19,8 +19,9 @@ The first time, this:
 
 1. adds hooks to Claude Code's settings (`~/.claude/settings.json`), next to
    whatever is already there;
-2. opens the app in your browser, where you sign in and connect this
-   computer (check that the page shows the same ID as the terminal);
+2. opens the app (<https://agentnauts.vercel.app>) in your browser, where
+   you sign in and connect this computer (check that the page shows the same
+   ID as the terminal);
 3. keeps running and sends your agents to the app. `Ctrl+C` stops it.
 
 Claude Code sessions you start after that show up in the app.

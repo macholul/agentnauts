@@ -91,10 +91,14 @@ signed-out demo).
   placeholder, because the real one would send people to `localhost:5173`
   until Phase 3 gives the app an address. Still to do by hand: a person
   going through it with a real Claude Code session on Windows.
-- Phase 3: started (2026-10-02). `vercel.json` builds the web app on Vercel
-  straight from the repository; the built app was checked in a browser. Not
-  deployed yet. Once it has an address: set `CLOUD.appUrl`, add the address
-  to Supabase's Site URL and Redirect URLs, then release the npm package.
+- Phase 3: started (2026-10-02). The web app is live at
+  <https://agentnauts.vercel.app>: a Vercel project linked to the repository
+  that redeploys on every push to `main`, and `CLOUD.appUrl` points at it.
+  Still to do: the address in Supabase's Site URL and Redirect URLs (until
+  then, signing in on the hosted app sends people back to localhost), the
+  signed-out landing page and first-run state, small screens, sign-in for
+  people outside the team (mail service or GitHub), a separate production
+  Supabase project, the own domain, and releasing the npm package.
 
 ## Phases
 

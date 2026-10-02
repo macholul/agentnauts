@@ -11,6 +11,8 @@ Subagents drop in as smaller crew astronauts and fly off when they're done.
 Inspired by Pixel Agents, but in 3D, with a soft pastel, Astroneer-like toy
 style (all art is original, built from primitives).
 
+The app is hosted at <https://agentnauts.vercel.app>.
+
 ![agentnauts screenshot](docs/screenshot.jpg)
 
 ## Quick start
@@ -71,10 +73,9 @@ npx agentnauts
 browser, `--verbose` prints every event. In this repo `npm run dev` passes
 all three, so developing never changes your own Claude Code settings.
 
-The package is not released yet: the published `agentnauts` on npm is a
-placeholder until the web app has a public address (see
-[`docs/ROADMAP.md`](docs/ROADMAP.md)). `npm pack -w server` builds the real
-one.
+The package is not released yet: the published `agentnauts` on npm is still
+a placeholder (see [`docs/ROADMAP.md`](docs/ROADMAP.md)). `npm pack -w server`
+builds the real one, which opens the hosted app.
 
 ## Connecting Claude Code
 
@@ -275,9 +276,10 @@ setup for the maintainer only:**
    members can use channels at all.
 
 **Hosting the web app.** `npm run build -w web` makes a static site in
-`web/dist`, so any static host works. For Vercel the settings are in
-[`vercel.json`](vercel.json): import the repository and deploy, with nothing
-to configure. Then put the site's address in two places: `CLOUD.appUrl` in
+`web/dist`, so any static host works. This build is on Vercel, as the project
+`agentnauts`, which redeploys on every push to `main`; the settings are in
+[`vercel.json`](vercel.json), so a fork only needs to import the repository.
+The site's address goes in two places: `CLOUD.appUrl` in
 [`shared/src/cloud.ts`](shared/src/cloud.ts), so the published tool opens it
 (run from this repo, the daemon keeps linking to `http://localhost:5173`),
 and Supabase's Authentication → URL Configuration, as the Site URL and as

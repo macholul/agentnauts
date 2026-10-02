@@ -13,10 +13,8 @@ export const CLOUD = {
    * Where the hosted web app lives; the published tool opens and prints links
    * to it. (Run from source, the daemon links to the local dev server
    * instead.) Override with AGENTNAUTS_APP_URL.
-   *
-   * Not hosted yet, so this is still the local address.
    */
-  appUrl: 'http://localhost:5173',
+  appUrl: 'https://agentnauts.vercel.app',
   supabaseUrl: 'https://ukcwdorzglnawnjfeazz.supabase.co',
   supabaseAnonKey:
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVrY3dkb3J6Z2xuYXduamZlYXp6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA2MDEwMTMsImV4cCI6MjEwNjE3NzAxM30.vStCSfebALGb-3jf3RllvVGLJu4NitbJ3UzLMVrO510',
