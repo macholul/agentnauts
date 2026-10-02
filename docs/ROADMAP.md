@@ -84,6 +84,17 @@ signed-out demo).
 - Phase 1: built and run with two accounts on one Mac. Database rules, the
   Edge Function and a send-only token were checked against the real project
   (accepted in its own room, refused elsewhere, cut off on revoke).
+- Phase 2: built (2026-10-02). `server/` is the package `agentnauts`; the
+  packed tarball was installed into an empty project and run with a throwaway
+  home folder on macOS (`npm run smoke -w server`), and CI repeats that on
+  Linux and Windows. Not released: `npx agentnauts` still gets the 0.0.1
+  placeholder, because the real one would send people to `localhost:5173`
+  until Phase 3 gives the app an address. Still to do by hand: a person
+  going through it with a real Claude Code session on Windows.
+- Phase 3: started (2026-10-02). `vercel.json` builds the web app on Vercel
+  straight from the repository; the built app was checked in a browser. Not
+  deployed yet. Once it has an address: set `CLOUD.appUrl`, add the address
+  to Supabase's Site URL and Redirect URLs, then release the npm package.
 
 ## Phases
 
@@ -146,16 +157,22 @@ Goal: `npx <name>` takes a new user from nothing to an astronaut on screen.
 - New publishable package built from `server/` with `shared/` bundled in
   (esbuild is already used for the server build).
 - Commands: default/`start` (pair if needed, install hooks if needed, run the
-  daemon, print the app link), `connect` (pair with another room),
-  `disconnect`, `hooks install`, `hooks uninstall`, `status`.
+  daemon, print the app link), `connect`, `disconnect`, `hooks install`,
+  `hooks uninstall`, `status`, and `uninstall` (all of the above undone).
+  Rooms are joined in the app, so `connect` only pairs the computer with the
+  account.
 - Pairing polish: the tool opens the browser itself and waits until the agent
   row exists.
+- `disconnect` works without an account session: the computer signs a
+  request for exactly that and `agent-auth` removes its rows (`agent_logout`).
 - Hooks installer: merges into `~/.claude/settings.json` without touching
   other settings, marks its entries so uninstall removes only those, and uses
   the full hook list from `docs/claude-settings.example.json`.
 - Replace the generic `PORT` variable with a product-specific one (launchers
-  set `PORT`).
-- Check on macOS, Linux and Windows (hooks use `curl … || true`).
+  set `PORT`). Done for every variable the daemon reads, and it no longer
+  loads a `.env` from whatever folder it is started in.
+- Check on macOS, Linux and Windows (hooks use `curl … || true`; on Windows
+  Claude Code runs them with Git Bash).
 
 Done when: on a clean user account, one command pairs, installs hooks, and a
 new Claude Code session shows up in the web app; `hooks uninstall` and
@@ -222,8 +239,8 @@ is a selling point at launch.
   whether its rooms changed (about 20,000 calls a month for someone working
   full days). Fine for a beta; before launch, replace it with a cheaper
   "did anything change" check.
-- **Name not reserved yet**: the npm package, the domain and the GitHub repo
-  name are only free, not taken by us, until someone registers them.
+- **Domain not bought yet**: the npm name (a 0.0.1 placeholder) and the
+  GitHub repo are ours; the domain is only free until someone registers it.
 - **Old tool, new site**: handled by the protocol version from Phase 1.
 
 ## Verification

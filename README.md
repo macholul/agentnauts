@@ -29,158 +29,102 @@ remembered. Production builds (`npm start`, served on :4173) start with it off.
 To see your real Claude Code sessions:
 
 1. **Sign in** in the HUD (a link is emailed to you, no password).
-2. **Connect this computer**: the daemon prints a link when it starts. Open
-   it in the browser where you are signed in, check that the page shows the
-   same ID as the terminal, and click **Connect**.
-3. **Add the hooks** (next section) and start a Claude Code session.
+2. **Connect this computer**: `npm run agentnauts -- connect` opens the app
+   with this computer's link. Check that the page shows the same ID as the
+   terminal, and click **Connect**.
+3. **Add the hooks**: `npm run agentnauts -- hooks install` (see
+   [Connecting Claude Code](#connecting-claude-code)).
 
 | Command             | What it does                                                        |
 | ------------------- | ------------------------------------------------------------------- |
 | `npm run dev`       | Daemon (`tsx watch`) and Vite dev server together                   |
 | `npm run web`       | Only the web app                                                    |
 | `npm run server`    | Only the daemon                                                     |
+| `npm run agentnauts -- <command>` | The `agentnauts` command from source (`status`, `connect`, `hooks install`, …) |
 | `npm run typecheck` | Strict TypeScript check of all workspaces                           |
 | `npm test`          | Unit tests, including the database access rules                     |
-| `npm run build`     | Typecheck, then build `web/dist` and `server/dist`                  |
+| `npm run build`     | Typecheck, then build `web/dist` and `server/dist/cli.js`           |
 | `npm start`         | Build, then run the bundled daemon and `vite preview`               |
+| `npm run smoke -w server` | Pack the npm package, install it in an empty project and run it with a throwaway home folder |
 | `npm run check:cloud -w server` | Check this computer's connection against the real Supabase project |
+
+## The `agentnauts` command
+
+`server/` is the npm package [`agentnauts`](server/README.md): the daemon and
+the command that sets everything up. Once the web app is hosted, this is all
+a user runs:
+
+```bash
+npx agentnauts
+```
+
+| Command | What it does |
+| --- | --- |
+| `agentnauts` | Add the hooks, connect this computer if it isn't yet (opens the app in a browser and waits), then run the daemon |
+| `agentnauts connect` | Connect this computer to your account |
+| `agentnauts disconnect` | Remove this computer's connections, in every room |
+| `agentnauts status` | Whether the daemon runs, the computer's ID, the rooms it publishes to, the hooks |
+| `agentnauts hooks install` / `uninstall` / `status` | Manage the Claude Code hooks |
+| `agentnauts uninstall` | Disconnect, remove the hooks and this computer's key |
+
+`--no-hooks` leaves Claude Code's settings alone, `--no-open` doesn't open the
+browser, `--verbose` prints every event. In this repo `npm run dev` passes
+all three, so developing never changes your own Claude Code settings.
+
+The package is not released yet: the published `agentnauts` on npm is a
+placeholder until the web app has a public address (see
+[`docs/ROADMAP.md`](docs/ROADMAP.md)). `npm pack -w server` builds the real
+one.
 
 ## Connecting Claude Code
 
-1. Start the daemon (`npm run dev` or `npm run server`). It listens on port 4747.
-2. Add these hooks to `.claude/settings.json` in your project, or to
-   `~/.claude/settings.json` to watch every project. (The same file is in
-   [`docs/claude-settings.example.json`](docs/claude-settings.example.json).)
-   If the file already has a `hooks` section, merge these entries into it.
+`agentnauts` (or `agentnauts hooks install`) adds one hook per event to
+`~/.claude/settings.json`, so every Claude Code session on this computer
+shows up. This is what it writes for each event (`matcher` only on the
+three tool events):
 
 ```json
 {
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
-          }
-        ]
-      }
-    ],
-    "PostToolUseFailure": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
-          }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
-          }
-        ]
-      }
-    ],
-    "SubagentStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
-          }
-        ]
-      }
-    ],
-    "SubagentStop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
-          }
-        ]
-      }
-    ],
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
-          }
-        ]
-      }
-    ]
-  }
+  "matcher": "*",
+  "hooks": [
+    {
+      "type": "command",
+      "command": "curl -s --connect-timeout 0.5 -m 2 -X POST -H 'Content-Type: application/json' -d @- http://127.0.0.1:4747/event || true # agentnauts",
+      "timeout": 5
+    }
+  ]
 }
 ```
 
-3. Start (or restart) Claude Code. Its astronaut lands on the pad and gets to
-   work. The HUD shows **Claude Code: connected** and counts incoming events.
+The hook pipes the hook's JSON (stdin) to the daemon. `|| true` and the time
+limits mean a stopped or stuck daemon never breaks or slows Claude Code: curl
+fails fast with "connection refused" and the hook still exits 0. The daemon
+replies with an empty body, so nothing ends up on the hook's stdout.
 
-Each hook pipes the hook's JSON (stdin) to the daemon. `|| true` means a stopped
-daemon never breaks Claude Code: curl fails fast with "connection refused" and
-the hook still exits 0. The daemon replies with an empty body, so nothing ends
-up on the hook's stdout.
+The installer only ever touches its own hooks, which it recognizes by the
+`# agentnauts` at the end of the command (and the exact command older
+versions of this README had you paste). Your other settings and hooks stay
+as they are, `agentnauts hooks uninstall` leaves the file as it was, and a
+settings file that isn't valid JSON is left alone. To add the hooks by hand
+instead (for example to one project's `.claude/settings.json`), copy
+[`docs/claude-settings.example.json`](docs/claude-settings.example.json).
 
-`SessionEnd` makes the commander fly home when you quit, `SubagentStart` drops
-crew in as soon as a subagent launches, and `UserPromptSubmit` shows
-"Thinking…". Sessions that go quiet for 30 minutes fly home on their own.
+The events: `PreToolUse`, `PostToolUse` and `PostToolUseFailure` move the
+astronaut between stations, `Notification` sends it to the landing pad,
+`SessionStart` / `SessionEnd` make the commander land and fly home,
+`SubagentStart` / `SubagentStop` do the same for crew, `UserPromptSubmit`
+shows "Thinking…" and `Stop` ends a turn. Sessions that go quiet for 30
+minutes fly home on their own.
+
+On Windows, Claude Code runs hooks with Git Bash (it comes with Git for
+Windows), which the command needs.
 
 ### Try it without Claude Code
 
 ```bash
 curl -s -X POST -H 'Content-Type: application/json' \
   -d '{"session_id":"demo","cwd":"/tmp/my-project","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"npm test"}}' \
-  http://localhost:4747/event
+  http://127.0.0.1:4747/event
 ```
 
 ## What the astronauts do
@@ -233,9 +177,12 @@ through Supabase, so the app can be hosted anywhere and opened on any device.
 
 - `shared/`: `AgentEvent` (normalized event), `Intent`, the pure
   `mapEventToIntent` function, signed-message and pairing-link formats.
-- `server/`: the daemon. Plain `node:http` + `ws`: `POST /event`,
-  `GET /health`, `GET /status`, `WS /ws` (local mode). Unknown or malformed
-  payloads are logged and ignored, never fatal.
+- `server/`: the npm package `agentnauts`. `cli.ts` is the command,
+  `hooks.ts` the hooks installer, `daemon.ts` the daemon: plain `node:http` +
+  `ws` with `POST /event`, `GET /health`, `GET /status`, `POST /refresh`,
+  `WS /ws` (local mode). Unknown or malformed payloads are logged and
+  ignored, never fatal. `npm run build` bundles it, with `shared/`, into the
+  one published file, `dist/cli.js`.
 - `supabase/`: migrations (rooms, agent credentials, access rules) and the
   `agent-auth` Edge Function.
 - `web/`: Vite + React + TypeScript, three.js via `@react-three/fiber` and
@@ -279,9 +226,10 @@ your Claude Code ──hooks──▶ your daemon ──signed events──▶ y
 **Using it** (HUD, top left):
 
 1. **Sign in** with your email: click the link Supabase emails you (no password).
-2. **Connect a computer**: open the link its daemon prints, compare the ID,
-   click **Connect**. It shows up under **Your computers**; **disconnect**
-   cuts it off at once.
+2. **Connect a computer**: run `agentnauts` (or `agentnauts connect`) on it;
+   the app opens with that computer's link. Compare the ID with the terminal
+   and click **Connect**. It shows up under **Your computers**; **disconnect**
+   there, or `agentnauts disconnect` on the computer, cuts it off at once.
 3. **Create a room**, or **ask to join** one with its code / invite link. The
    owner sees your request (name + email) and clicks **Let in** or **Deny**.
    Owners can remove people and delete the room later.
@@ -298,7 +246,9 @@ the `agent-auth` function answers with a one-hour token for each room that
 key is connected to. Such a token can do exactly one thing: send events to
 that room's channel. It cannot read the room, see your other rooms or change
 anything, and it stops working the moment the computer is disconnected,
-removed from the room, or the room is deleted.
+removed from the room, or the room is deleted. A computer can also
+disconnect itself (`agentnauts disconnect`): it signs a request for exactly
+that, and the function removes that key's connections.
 
 **How it's hosted:** one [Supabase](https://supabase.com) project serves
 everyone using this build: sign-in, the tables, the `agent-auth` function and
@@ -323,6 +273,16 @@ setup for the maintainer only:**
    Link template, and the app accepts the code from the email as well.
 5. Realtime → Settings: turn **off** "Allow public access", so only signed-in
    members can use channels at all.
+
+**Hosting the web app.** `npm run build -w web` makes a static site in
+`web/dist`, so any static host works. For Vercel the settings are in
+[`vercel.json`](vercel.json): import the repository and deploy, with nothing
+to configure. Then put the site's address in two places: `CLOUD.appUrl` in
+[`shared/src/cloud.ts`](shared/src/cloud.ts), so the published tool opens it
+(run from this repo, the daemon keeps linking to `http://localhost:5173`),
+and Supabase's Authentication → URL Configuration, as the Site URL and as
+`https://<address>/**` under Redirect URLs. Keep `http://localhost:5173/**`
+in that list for development.
 
 `npm run check:cloud -w server` checks a connected computer against the real
 project. The access rules are tested against a real Postgres in
@@ -358,35 +318,41 @@ events straight from the daemon on `localhost:4747`.
 
 ## Configuration
 
-| Variable           | Where  | Default               | Purpose                                                   |
-| ------------------ | ------ | --------------------- | --------------------------------------------------------- |
-| `PORT`             | server | `4747`                | Daemon port (update the hook URL too)                     |
-| `HOST`             | server | `127.0.0.1`           | Bind address. Use `0.0.0.0` to open it to your LAN        |
-| `ALLOWED_ORIGINS`  | server | localhost pages only  | Extra browser origins allowed to connect, comma separated |
-| `AGENTNAUTS_QUIET` | server | unset                 | `1` silences per-event logging                            |
-| `AGENTNAUTS_APP_URL` | server | `shared/src/cloud.ts` | Where the web app lives, for the link the daemon prints  |
-| `SUPABASE_URL`, `SUPABASE_ANON_KEY` | server | `shared/src/cloud.ts` | Use a different Supabase project |
+| Variable | Where | Default | Purpose |
+| --- | --- | --- | --- |
+| `AGENTNAUTS_PORT` | daemon | `4747` | Daemon port. The hooks carry it, so run `agentnauts hooks install` with the same value |
+| `AGENTNAUTS_HOST` | daemon | `127.0.0.1` | Bind address. Use `0.0.0.0` to open it to your LAN |
+| `AGENTNAUTS_ALLOWED_ORIGINS` | daemon | localhost pages only | Extra browser origins allowed to connect, comma separated |
+| `AGENTNAUTS_APP_URL` | daemon | `shared/src/cloud.ts` (run from this repo: `http://localhost:5173`) | Where the web app lives, for the link the daemon opens and prints |
+| `AGENTNAUTS_SUPABASE_URL`, `AGENTNAUTS_SUPABASE_ANON_KEY` | daemon | `shared/src/cloud.ts` | Use a different Supabase project |
+| `CLAUDE_CONFIG_DIR` | daemon | `~/.claude` | Claude Code's own variable for where its settings live; the hooks installer follows it |
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | web | `shared/src/cloud.ts` | Use a different Supabase project |
-| `VITE_LOCAL_BRIDGE` | web   | unset                 | `1` reads events straight from a daemon on this machine   |
-| `VITE_BRIDGE_URL`  | web    | `ws://<page host>:4747/ws` | Where local mode connects                            |
+| `VITE_LOCAL_BRIDGE` | web | unset | `1` reads events straight from a daemon on this machine |
+| `VITE_BRIDGE_URL` | web | `ws://<page host>:4747/ws` | Where local mode connects |
 
-The daemon only listens on loopback by default, and only accepts browser
-connections from `localhost` pages (hook `curl` calls send no `Origin` and are
-always accepted). That's because events include file names and commands.
+The daemon's variables all carry the product's name on purpose: it runs
+inside other projects' shells and under launchers, which set `PORT`, `HOST`
+or `SUPABASE_URL` for their own reasons. It reads no `.env` file either.
+
+The daemon only listens on loopback by default, only answers requests
+addressed to this computer, and only accepts browser connections from
+`localhost` pages (hook `curl` calls send no `Origin` and are always
+accepted). That's because events include file names and commands.
 
 ## Troubleshooting
 
-- **No astronauts for your sessions**: check that the computer is listed under
-  **Your computers** in the HUD and that the daemon is running
-  (`curl http://localhost:4747/status` shows its ID and the rooms it publishes
-  to). A page opened after a session started shows it within 20 seconds.
+- **No astronauts for your sessions**: `agentnauts status` says whether the
+  daemon is running, which rooms this computer publishes to and whether the
+  hooks are installed. The computer should also be listed under **Your
+  computers** in the HUD. A page opened after a session started shows it
+  within 20 seconds.
 - **The daemon says "not published"**: the computer was disconnected in the
   app, or its clock is more than two minutes off. (Events travel encoded
   because Supabase's gateway refuses requests whose text looks like an attack,
   which shell commands and SQL often do; see `signRoomContent` in
   `server/src/room.ts`.)
-- **Events arrive but nothing moves**: check the daemon log. Unknown payloads
-  are logged with a preview.
+- **Events arrive but nothing moves**: run the daemon with `--verbose` and
+  check its log. Unknown payloads are logged with a preview.
 - **Subagent work shows up on the main astronaut**: older Claude Code versions
   don't include `agent_id` in hook payloads, so subagent tool calls can't be
   told apart. Update Claude Code.

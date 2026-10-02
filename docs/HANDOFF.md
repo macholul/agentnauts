@@ -28,8 +28,8 @@ npm test           # 26 tests (shared + server, incl. database access rules)
 npm run build
 ```
 
-Claude Code hooks config (curl → `http://localhost:4747/event`) is in the
-README and `docs/claude-settings.example.json`. The dev simulator (fake
+Claude Code hooks (curl → `http://127.0.0.1:4747/event`) are installed with
+`npm run agentnauts -- hooks install`; see the README. The dev simulator (fake
 agents) is on by default in dev; toggle in the HUD.
 
 ## Layout (npm workspaces)
@@ -122,6 +122,52 @@ See `docs/ROADMAP.md` for the plan. What changed from the notes below:
 - MCP tools (`mcp__…`) go to the radar; in rooms without details they are
   reported under one generic name.
 
+## Phase 2 of the roadmap: the npm tool (2026-10-02)
+
+- `server/` is now the package `agentnauts` (`bin: dist/cli.js`, one bundled
+  file, `ws` as its only dependency). `server/src/index.ts` is gone:
+  `cli.ts` is the command, `daemon.ts` the daemon (`startDaemon`), `args.ts`
+  the argument parsing, `config.ts` the settings, `hooks.ts` the hooks
+  installer, `browser.ts` opens the pairing link.
+- Commands: `agentnauts` (start), `connect`, `disconnect`, `status`,
+  `hooks install|uninstall|status`, `uninstall`. From the repo:
+  `npm run agentnauts -- <command>`. `npm run dev` starts the daemon with
+  `--no-hooks --no-open --verbose`.
+- Settings are `AGENTNAUTS_PORT`, `AGENTNAUTS_HOST`,
+  `AGENTNAUTS_ALLOWED_ORIGINS`, `AGENTNAUTS_APP_URL`,
+  `AGENTNAUTS_SUPABASE_URL`, `AGENTNAUTS_SUPABASE_ANON_KEY`. The generic
+  `PORT`, `HOST`, `SUPABASE_URL` are ignored and no `.env` is loaded.
+- The hooks installer recognizes its own hooks by `# agentnauts` at the end
+  of the command (and the old hand-pasted command), and never touches
+  anything else in `~/.claude/settings.json`. The hook is a shell command on
+  purpose: the no-shell `args` form can't ignore curl's exit code.
+  `docs/claude-settings.example.json` is generated from the installer and a
+  test keeps them equal.
+- `agentnauts disconnect`: `agent-auth` takes `action: "disconnect"` with a
+  proof signed for that (`agentDisconnectMessage`), and calls `agent_logout`
+  (`supabase/migrations/20261002000000_agent_logout.sql`, service role only).
+  Applied and deployed on the real project (function version 3).
+- The daemon refuses requests whose `Host` header is not a local name (DNS
+  rebinding), in addition to the Origin check.
+- `npm run smoke -w server` packs the package, installs the tarball into an
+  empty project and runs every command with a throwaway home folder and a
+  stand-in service. CI runs typecheck, tests, build and the smoke test on
+  Linux, macOS and Windows.
+- When trying commands by hand, set `HOME` to a scratch folder: `hooks
+  install`, `disconnect` and `uninstall` act on the real settings file and
+  the real key otherwise.
+- Not done: releasing to npm (waits for the hosted app, since
+  `CLOUD.appUrl` is still `http://localhost:5173`), and a person trying it on
+  Windows.
+- Hosting is prepared, not done: `vercel.json` (repo root) builds
+  `web/dist` on Vercel with no dashboard settings, forbids showing the app
+  inside another site's frame (the Connect button registers a computer, so
+  it must not be clickable through a disguised page) and caches the hashed
+  assets. When the app has an address, put it in `CLOUD.appUrl`
+  (`shared/src/cloud.ts`) and in Supabase's Site URL and Redirect URLs. Run
+  from source, the daemon keeps linking to `http://localhost:5173`
+  (`readSettings(env, fromSource)` in `server/src/config.ts`).
+
 ## Status: verified live (2026-10-01)
 
 Tested on a real Mac against the real Supabase project:
@@ -149,11 +195,10 @@ Found and fixed during that test:
   shared wall clock (`web/src/world/sync.ts`), not `Math.random()` or page
   uptime. Not synced: free-spinning parts, walk cycles, simulator agents.
 
-Testing two accounts on one machine: run a second bridge with its own `HOME`
-and `PORT=4748`, and a second web app on 5174 with
-`VITE_BRIDGE_URL=ws://localhost:4748/ws`. Post hook JSON to
-`http://localhost:4748/event` with curl to give that side an agent. Note the
-bridge reads the generic `PORT` variable, which some launchers set.
+Testing two accounts on one machine: run a second daemon with its own `HOME`,
+`AGENTNAUTS_PORT=4748` and `AGENTNAUTS_APP_URL=http://localhost:5174`, and a
+second web app on 5174. Post hook JSON to `http://localhost:4748/event` with
+curl to give that side an agent.
 
 ## Known limits / ideas
 
@@ -172,8 +217,8 @@ bridge reads the generic `PORT` variable, which some launchers set.
   `--use-angle=swiftshader --enable-unsafe-swiftshader`, but is slow; place
   agents directly rather than waiting for them to walk.
 - To fake Supabase locally, run the web app with `VITE_SUPABASE_URL` /
-  `VITE_SUPABASE_ANON_KEY` and the bridge with `SUPABASE_URL` /
-  `SUPABASE_ANON_KEY` pointing at a small HTTP server that answers
+  `VITE_SUPABASE_ANON_KEY` and the daemon with `AGENTNAUTS_SUPABASE_URL` /
+  `AGENTNAUTS_SUPABASE_ANON_KEY` pointing at a small HTTP server that answers
   `/auth/v1/otp`, `/auth/v1/verify`, `/auth/v1/user`, `/rest/v1/rpc/*`,
   `/rest/v1/room_members` and `/realtime/v1/api/broadcast/*`.
 - When killing test processes by pattern, don't put the pattern literally in
