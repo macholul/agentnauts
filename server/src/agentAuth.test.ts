@@ -8,8 +8,8 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
-import { agentAuthMessage, parseAgentConnections } from '@agentnauts/shared';
-import { handle, proofMessage, type Env } from '../../supabase/functions/agent-auth/index';
+import { agentAuthMessage, agentDisconnectMessage, parseAgentConnections } from '@agentnauts/shared';
+import { disconnectMessage, handle, proofMessage, type Env } from '../../supabase/functions/agent-auth/index';
 import { loadOrCreateIdentity } from './identity';
 
 const identity = loadOrCreateIdentity(join(mkdtempSync(join(tmpdir(), 'an-')), 'identity.json'));
@@ -122,6 +122,34 @@ describe('agent-auth function', () => {
     const { SUPABASE_SERVICE_ROLE_KEY: _key, ...noDb } = ENV;
     assert.equal((await handle(request(proof()), noDb, fakeDb(ROWS).fetch, () => NOW)).status, 500);
     assert.equal((await handle(request(proof()), ENV, fakeDb({ message: 'boom' }, 500).fetch, () => NOW)).status, 502);
+  });
+
+  it('lets a computer disconnect itself, with a proof made for that', async () => {
+    assert.equal(disconnectMessage('KEY', 42), agentDisconnectMessage('KEY', 42));
+    const leave = { action: 'disconnect', publicKey: identity.publicKey, timestamp: NOW, signature: identity.sign(agentDisconnectMessage(identity.publicKey, NOW)) };
+
+    const db = fakeDb(2);
+    const res = await handle(request(leave), ENV, db.fetch, () => NOW);
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { disconnected: 2 });
+    assert.equal(db.calls.length, 1);
+    assert.equal(db.calls[0]!.url, 'https://project.example/rest/v1/rpc/agent_logout');
+    assert.equal(db.calls[0]!.headers.Authorization, 'Bearer service-role-key');
+    assert.deepEqual(db.calls[0]!.body, { p_public_key: identity.publicKey });
+    // It needs no signing key: it hands out nothing.
+    const { AGENT_JWT_SECRET: _secret, ...noSecret } = ENV;
+    assert.equal((await handle(request(leave), noSecret, fakeDb(0).fetch, () => NOW)).status, 200);
+
+    // A sign-in proof (which the daemon sends all day) is not a disconnect, and the other way round.
+    const untouched = fakeDb(1);
+    assert.equal((await handle(request({ ...proof(), action: 'disconnect' }), ENV, untouched.fetch, () => NOW)).status, 401);
+    assert.equal((await handle(request({ ...leave, action: 'login' }), ENV, untouched.fetch, () => NOW)).status, 401);
+    const { action: _action, ...asLogin } = leave;
+    assert.equal((await handle(request(asLogin), ENV, untouched.fetch, () => NOW)).status, 401);
+    assert.equal((await handle(request({ ...leave, action: 'delete-everything' }), ENV, untouched.fetch, () => NOW)).status, 400);
+    assert.equal((await handle(request({ ...leave, timestamp: NOW - 5 * 60_000 }), ENV, untouched.fetch, () => NOW)).status, 401);
+    assert.equal(untouched.calls.length, 0);
+    assert.equal((await handle(request(leave), ENV, fakeDb({ message: 'boom' }, 500).fetch, () => NOW)).status, 502);
   });
 
   it('can sign with an imported ES256 key instead of the shared secret', async () => {

@@ -319,6 +319,24 @@ describe('agent credentials', () => {
     assert.deepEqual(await channelAccess(friendTeam, topic(team)), AGENT);
   });
 
+  it('lets a computer disconnect itself from every room, through the Edge Function only', async () => {
+    const desktop = await connect(OWNER, personal, DESKTOP, "Olive's desktop");
+    const desktopTeam = await connect(OWNER, team, DESKTOP, "Olive's desktop");
+    assert.deepEqual(await channelAccess(desktopTeam, topic(team)), AGENT);
+    await rejects(as(OWNER, 'select public.agent_logout($1)', [DESKTOP]), /permission denied/);
+    await rejects(as(null, 'select public.agent_logout($1)', [DESKTOP]), /permission denied/);
+    await rejects(as(desktop, 'select public.agent_logout($1)', [DESKTOP]), /permission denied/);
+
+    assert.deepEqual(await asService('select public.agent_logout($1) as n', [DESKTOP]), [{ n: 2 }]);
+    assert.deepEqual(await channelAccess(desktop, topic(personal)), NOTHING);
+    assert.deepEqual(await channelAccess(desktopTeam, topic(team)), NOTHING);
+    assert.deepEqual(await asService('select public.agent_logout($1) as n', [DESKTOP]), [{ n: 0 }]);
+    // Other computers are untouched, and the person is still in their rooms.
+    assert.deepEqual(await channelAccess(laptopPersonal, topic(personal)), AGENT);
+    assert.deepEqual(await channelAccess(friendTeam, topic(team)), AGENT);
+    assert.deepEqual(await channelAccess(OWNER, topic(team)), MEMBER);
+  });
+
   it('disconnects your computers when you leave or are removed, or the room goes', async () => {
     await as(OWNER, 'select public.remove_member($1, $2)', [team, FRIEND]);
     assert.deepEqual(await channelAccess(friendTeam, topic(team)), NOTHING);

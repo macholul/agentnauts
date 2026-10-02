@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { handle, type Env } from '../../supabase/functions/agent-auth/index';
-import { fetchConnections, publish } from './cloud';
+import { disconnectComputer, fetchConnections, publish } from './cloud';
 import { loadOrCreateIdentity } from './identity';
 
 const identity = loadOrCreateIdentity(join(mkdtempSync(join(tmpdir(), 'an-')), 'identity.json'));
@@ -41,6 +41,25 @@ describe('daemon cloud calls', () => {
       throw new Error('fetch failed');
     }) as typeof fetch;
     assert.deepEqual(await fetchConnections(CLOUD, identity, offline), { ok: false, status: 0, error: 'fetch failed' });
+  });
+
+  it('disconnects itself through the real function code', async () => {
+    let asked = '';
+    const db = (async (url: string | URL | Request) => {
+      asked = String(url);
+      return new Response('3');
+    }) as typeof fetch;
+    const network = (async (url: string | URL | Request, init?: RequestInit) => handle(new Request(String(url), init), ENV, db)) as typeof fetch;
+    assert.deepEqual(await disconnectComputer(CLOUD, identity, network), { ok: true, value: 3 });
+    assert.equal(asked, 'https://project.example/rest/v1/rpc/agent_logout');
+
+    const offline = (async () => {
+      throw new Error('fetch failed');
+    }) as typeof fetch;
+    assert.deepEqual(await disconnectComputer(CLOUD, identity, offline), { ok: false, status: 0, error: 'fetch failed' });
+    // A function that predates disconnecting answers a sign-in: not taken for success.
+    const old = (async () => new Response(JSON.stringify({ connections: [] }))) as typeof fetch;
+    assert.equal((await disconnectComputer(CLOUD, identity, old)).ok, false);
   });
 
   it("posts to the room's private channel with that room's token", async () => {

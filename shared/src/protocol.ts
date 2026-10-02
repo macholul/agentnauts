@@ -122,6 +122,15 @@ export function agentAuthMessage(publicKey: string, timestamp: number): string {
   return `agentnauts-agent-auth:${publicKey}:${timestamp}`;
 }
 
+/**
+ * What a daemon signs to disconnect itself from every room. A different
+ * message, so a captured sign-in proof can't be replayed as a disconnect.
+ * Must match disconnectMessage() in supabase/functions/agent-auth.
+ */
+export function agentDisconnectMessage(publicKey: string, timestamp: number): string {
+  return `agentnauts-agent-disconnect:${publicKey}:${timestamp}`;
+}
+
 /** One room this computer publishes to, with its current send-only token. */
 export interface AgentConnection {
   agentId: string;

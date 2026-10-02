@@ -5,6 +5,7 @@
  */
 import {
   agentAuthMessage,
+  agentDisconnectMessage,
   parseAgentConnections,
   roomTopic,
   type AgentConnection,
@@ -47,6 +48,37 @@ export async function fetchConnections(
     if (!res.ok) return { ok: false, status: res.status, error: await errorText(res) };
     const connections = parseAgentConnections(await res.json());
     return connections ? { ok: true, value: connections } : { ok: false, status: 502, error: 'unexpected answer from agent-auth' };
+  } catch (error) {
+    return { ok: false, status: 0, error: (error as Error).message };
+  }
+}
+
+/**
+ * Disconnect this computer from every room it publishes to. Answers with how
+ * many connections were removed.
+ */
+export async function disconnectComputer(
+  cloud: CloudSettings,
+  identity: Identity,
+  fetchFn: typeof fetch = fetch,
+  now: () => number = Date.now,
+): Promise<CloudResult<number>> {
+  const timestamp = now();
+  try {
+    const res = await fetchFn(`${cloud.url}/functions/v1/agent-auth`, {
+      method: 'POST',
+      headers: { apikey: cloud.key, Authorization: `Bearer ${cloud.key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'disconnect',
+        publicKey: identity.publicKey,
+        timestamp,
+        signature: identity.sign(agentDisconnectMessage(identity.publicKey, timestamp)),
+      }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (!res.ok) return { ok: false, status: res.status, error: await errorText(res) };
+    const removed = ((await res.json()) as { disconnected?: unknown } | null)?.disconnected;
+    return typeof removed === 'number' ? { ok: true, value: removed } : { ok: false, status: 502, error: 'unexpected answer from agent-auth' };
   } catch (error) {
     return { ok: false, status: 0, error: (error as Error).message };
   }

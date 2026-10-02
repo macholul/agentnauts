@@ -9,6 +9,9 @@
  * lets it do exactly one thing: send broadcasts to that room's channel while
  * the row exists (see supabase/migrations/…_agents.sql).
  *
+ * With `action: "disconnect"` (and a proof signed for that), it removes the
+ * key's rows instead: a computer disconnecting itself.
+ *
  * Secrets (Edge Functions → Secrets):
  *   AGENT_JWT_SECRET        the project's legacy JWT secret (HS256), or
  *   AGENT_JWT_PRIVATE_JWK   an ES256 private key (JWK with a `kid`) that was
@@ -49,6 +52,11 @@ export function proofMessage(publicKey: string, timestamp: number): string {
   return `agentnauts-agent-auth:${publicKey}:${timestamp}`;
 }
 
+/** What the daemon signs to disconnect itself. Must match agentDisconnectMessage() in shared/src/protocol.ts. */
+export function disconnectMessage(publicKey: string, timestamp: number): string {
+  return `agentnauts-agent-disconnect:${publicKey}:${timestamp}`;
+}
+
 type Bytes = Uint8Array<ArrayBuffer>;
 const encoder = new TextEncoder();
 const utf8 = (text: string): Bytes => encoder.encode(text) as Bytes;
@@ -70,10 +78,10 @@ function bytesToBase64Url(bytes: Uint8Array): string {
 const KEY = /^[A-Za-z0-9_-]{43}$/;
 const SIGNATURE = /^[A-Za-z0-9_-]{86}$/;
 
-async function proofIsValid(publicKey: string, timestamp: number, signature: string): Promise<boolean> {
+async function proofIsValid(publicKey: string, message: string, signature: string): Promise<boolean> {
   try {
     const key = await crypto.subtle.importKey('raw', base64UrlToBytes(publicKey), { name: 'Ed25519' }, false, ['verify']);
-    return await crypto.subtle.verify({ name: 'Ed25519' }, key, base64UrlToBytes(signature), utf8(proofMessage(publicKey, timestamp)));
+    return await crypto.subtle.verify({ name: 'Ed25519' }, key, base64UrlToBytes(signature), utf8(message));
   } catch {
     return false;
   }
@@ -127,13 +135,14 @@ export async function handle(
 ): Promise<Response> {
   if (req.method !== 'POST') return json(405, { error: 'POST only' });
 
-  let body: { publicKey?: unknown; timestamp?: unknown; signature?: unknown };
+  let body: { publicKey?: unknown; timestamp?: unknown; signature?: unknown; action?: unknown };
   try {
     body = (await req.json()) as typeof body;
   } catch {
     return json(400, { error: 'expected JSON' });
   }
-  const { publicKey, timestamp, signature } = body;
+  const { publicKey, timestamp, signature, action = 'login' } = body;
+  if (action !== 'login' && action !== 'disconnect') return json(400, { error: 'unknown action' });
   if (
     typeof publicKey !== 'string' ||
     !KEY.test(publicKey) ||
@@ -149,9 +158,30 @@ export async function handle(
   if (Math.abs(time - timestamp) > MAX_SKEW_MS) {
     return json(401, { error: 'clock', detail: "this computer's clock is too far off", serverTime: time });
   }
-  if (!(await proofIsValid(publicKey, timestamp, signature))) return json(401, { error: 'bad signature' });
+  const message = action === 'disconnect' ? disconnectMessage(publicKey, timestamp) : proofMessage(publicKey, timestamp);
+  if (!(await proofIsValid(publicKey, message, signature))) return json(401, { error: 'bad signature' });
 
-  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return json(500, { error: 'function is missing its database settings' });
+  const { SUPABASE_URL: projectUrl, SUPABASE_SERVICE_ROLE_KEY: serviceKey } = env;
+  if (!projectUrl || !serviceKey) return json(500, { error: 'function is missing its database settings' });
+  /** Call a database function as the service role, for this key only. */
+  const rpc = (name: 'agent_login' | 'agent_logout') =>
+    fetchFn(`${projectUrl}/rest/v1/rpc/${name}`, {
+      method: 'POST',
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_public_key: publicKey }),
+    });
+
+  if (action === 'disconnect') {
+    try {
+      const res = await rpc('agent_logout');
+      if (!res.ok) return json(502, { error: 'database lookup failed' });
+      // How many rooms this computer was removed from.
+      return json(200, { disconnected: Number(await res.json()) || 0 });
+    } catch {
+      return json(502, { error: 'database lookup failed' });
+    }
+  }
+
   let signer: Signer | null;
   try {
     signer = await signerFrom(env);
@@ -162,15 +192,7 @@ export async function handle(
 
   let rows: AgentRow[];
   try {
-    const res = await fetchFn(`${env.SUPABASE_URL}/rest/v1/rpc/agent_login`, {
-      method: 'POST',
-      headers: {
-        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ p_public_key: publicKey }),
-    });
+    const res = await rpc('agent_login');
     if (!res.ok) return json(502, { error: 'database lookup failed' });
     rows = (await res.json()) as AgentRow[];
   } catch {
@@ -189,7 +211,7 @@ export async function handle(
       name: row.display_name,
       shareDetails: row.share_details,
       token: await mintToken(signer, {
-        iss: `${env.SUPABASE_URL}/auth/v1`,
+        iss: `${projectUrl}/auth/v1`,
         aud: 'authenticated',
         role: 'authenticated',
         // Not a user id: the agent row. Row gone, access gone.
