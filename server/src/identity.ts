@@ -8,7 +8,9 @@ import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-export const IDENTITY_FILE = join(homedir(), '.agentnauts', 'identity.json');
+/** Everything agentnauts keeps on this computer. */
+export const DATA_DIR = join(homedir(), '.agentnauts');
+export const IDENTITY_FILE = join(DATA_DIR, 'identity.json');
 
 export interface Identity {
   /** Ed25519 public key, base64url (43 chars). */
@@ -26,13 +28,20 @@ function fromPrivateKey(privateKey: KeyObject): Identity {
   };
 }
 
-export function loadOrCreateIdentity(file: string = IDENTITY_FILE): Identity {
+/** This computer's key, if it has one. */
+export function loadIdentity(file: string = IDENTITY_FILE): Identity | null {
   try {
     const saved = JSON.parse(readFileSync(file, 'utf8')) as { privateKey?: string };
     if (saved.privateKey) return fromPrivateKey(createPrivateKey(saved.privateKey));
   } catch {
-    // Missing or unreadable: make a new one below.
+    // Missing or unreadable.
   }
+  return null;
+}
+
+export function loadOrCreateIdentity(file: string = IDENTITY_FILE): Identity {
+  const existing = loadIdentity(file);
+  if (existing) return existing;
   const { privateKey } = generateKeyPairSync('ed25519');
   const pem = privateKey.export({ format: 'pem', type: 'pkcs8' }).toString();
   mkdirSync(dirname(file), { recursive: true });

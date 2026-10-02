@@ -210,6 +210,58 @@ describe('snapshots', () => {
 });
 
 describe('checking in with agent-auth', () => {
+  it('checks every few seconds again when someone starts connecting it later', async () => {
+    const { world, connections } = setup();
+    await connections.refresh();
+    // Unconnected for two hours: it only looks every five minutes by now.
+    world.now += 2 * 60 * 60_000;
+    connections.tick();
+    await connections.idle();
+    assert.equal(world.authCalls, 2);
+    world.now += 60_000;
+    connections.tick();
+    await connections.idle();
+    assert.equal(world.authCalls, 2, 'a minute later: not yet');
+
+    // `agentnauts connect` opens the app and tells the daemon.
+    connections.nudge();
+    await connections.idle();
+    assert.equal(world.authCalls, 3, 'looks at once');
+    world.rows = [PERSONAL_ROW];
+    world.now += 5000;
+    connections.tick();
+    await connections.idle();
+    assert.equal(world.authCalls, 4, 'and every 5 seconds again');
+    assert.equal(connections.summary.length, 1);
+  });
+
+  it('notices right away when told it was disconnected', async () => {
+    const { world, connections } = setup([PERSONAL_ROW]);
+    await connections.refresh();
+    world.now += 60_000;
+    connections.tick();
+    await connections.idle();
+    assert.equal(world.authCalls, 1, 'quiet and connected: no reason to look');
+
+    // `agentnauts disconnect` removed its rows and tells the daemon.
+    world.rows = [];
+    connections.nudge();
+    await connections.idle();
+    assert.equal(world.authCalls, 2);
+    assert.deepEqual(connections.summary, []);
+    assert.ok(world.logs.some((line) => line.includes('no longer publishing to "My agents"')));
+
+    // Told again a moment later (a page on this computer could do that): not more than every 5 seconds.
+    world.now += 1000;
+    connections.nudge();
+    await connections.idle();
+    assert.equal(world.authCalls, 2);
+    world.now += 4000;
+    connections.tick();
+    await connections.idle();
+    assert.equal(world.authCalls, 3);
+  });
+
   it('checks often while waiting to be connected, rarely once it is', async () => {
     const { world, connections } = setup();
     await connections.refresh();

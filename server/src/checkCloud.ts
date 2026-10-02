@@ -8,12 +8,13 @@
  */
 import { randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { ROOM_EVENT, keyFingerprint, makeId, resolveCloud, roomTopic, type AgentEvent } from '@agentnauts/shared';
+import { ROOM_EVENT, keyFingerprint, makeId, roomTopic, type AgentEvent } from '@agentnauts/shared';
 import { fetchConnections, publish } from './cloud';
+import { readSettings } from './config';
 import { loadOrCreateIdentity } from './identity';
 import { ProjectAliases, signRoomContent, toRoomContent } from './room';
 
-const cloud = resolveCloud(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+const { cloud } = readSettings();
 if (!cloud) {
   console.error('No Supabase project configured (see shared/src/cloud.ts).');
   process.exit(1);

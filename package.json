@@ -10,10 +10,11 @@
     "web"
   ],
   "scripts": {
-    "dev": "concurrently -k -n bridge,web -c magenta,cyan \"npm:server\" \"npm:web\"",
+    "dev": "concurrently -k -n daemon,web -c magenta,cyan \"npm:server\" \"npm:web\"",
     "web": "npm run dev -w web",
     "server": "npm run dev -w server",
-    "start": "npm run build && concurrently -k -n bridge,web -c magenta,cyan \"npm run start -w server\" \"npm run preview -w web\"",
+    "start": "npm run build && concurrently -k -n daemon,web -c magenta,cyan \"npm run start -w server\" \"npm run preview -w web\"",
+    "agentnauts": "npm run -s cli -w server --",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present"

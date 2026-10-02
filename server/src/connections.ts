@@ -26,7 +26,7 @@ export const SNAPSHOT_MS = 20_000;
  * A computer that isn't connected yet checks often right after starting
  * (someone is probably pairing it), then less and less.
  */
-const PAIRING_STEPS: readonly (readonly [runningForMs: number, everyMs: number])[] = [
+const PAIRING_STEPS: readonly (readonly [waitingForMs: number, everyMs: number])[] = [
   [10 * 60_000, 5_000],
   [60 * 60_000, 30_000],
   [Infinity, 5 * 60_000],
@@ -56,6 +56,11 @@ export interface ConnectionSummary {
   name: string;
   personal: boolean;
   shareDetails: boolean;
+}
+
+/** How much of this computer's activity a room gets, in words. */
+export function sharingNote(room: Pick<ConnectionSummary, 'personal' | 'shareDetails'>): string {
+  return room.personal ? 'your own room' : room.shareDetails ? 'with project names, files and commands' : 'tool names only';
 }
 
 export interface ConnectionsOptions {
@@ -88,7 +93,10 @@ export class CloudConnections {
   private eventsSinceRefresh = 0;
   private rejected = false;
   private lastError = '';
-  private readonly startedAt: number;
+  /** When someone was last likely to be pairing this computer: at start, or when told. */
+  private pairingSince: number;
+  /** Told that this computer's rooms just changed: check as soon as allowed. */
+  private nudged = false;
   private readonly log: (...args: unknown[]) => void;
   private readonly fetchFn: typeof fetch;
   private readonly now: () => number;
@@ -99,7 +107,7 @@ export class CloudConnections {
     this.log = log;
     this.fetchFn = fetchFn;
     this.now = now;
-    this.startedAt = now();
+    this.pairingSince = now();
   }
 
   get summary(): ConnectionSummary[] {
@@ -121,6 +129,16 @@ export class CloudConnections {
   stop(): void {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+  }
+
+  /**
+   * The command line connected or disconnected this computer, or is about to
+   * (`agentnauts connect`): check now, and often for a while.
+   */
+  nudge(): void {
+    this.pairingSince = this.now();
+    this.nudged = true;
+    this.tick();
   }
 
   /** Wait for a check and sends in flight (tests, shutdown). */
@@ -157,6 +175,7 @@ export class CloudConnections {
 
   private async doRefresh(): Promise<void> {
     if (!this.cloud) return;
+    this.nudged = false;
     const result = await fetchConnections(this.cloud, this.identity, this.fetchFn, this.now);
     this.lastRefreshAt = this.now();
     this.eventsSinceRefresh = 0;
@@ -174,10 +193,7 @@ export class CloudConnections {
     for (const connection of result.value) {
       const old = before.get(connection.roomId);
       if (!old || old.name !== connection.name || old.shareDetails !== connection.shareDetails) {
-        this.log(
-          `[cloud] publishing to "${connection.roomName}" as ${connection.name}` +
-            (connection.personal ? ' (your own room)' : connection.shareDetails ? ' (with project names, files and commands)' : ' (tool names only)'),
-        );
+        this.log(`[cloud] publishing to "${connection.roomName}" as ${connection.name} (${sharingNote(connection)})`);
       }
       before.delete(connection.roomId);
     }
@@ -195,10 +211,11 @@ export class CloudConnections {
   private shouldRefresh(now: number): boolean {
     if (this.refreshing) return false;
     const since = now - this.lastRefreshAt;
+    if (this.nudged) return since >= MIN_REFRESH_MS;
     if (this.rejected) return since >= REJECTED_RETRY_MS;
     if (this.lastError) return since >= FAILED_RETRY_MS;
     if (this.connections.length === 0) {
-      const [, every] = PAIRING_STEPS.find(([runningFor]) => now - this.startedAt < runningFor)!;
+      const [, every] = PAIRING_STEPS.find(([waitingFor]) => now - this.pairingSince < waitingFor)!;
       return since >= every;
     }
     const expires = Math.min(...this.connections.map((c) => c.expiresAt * 1000));

@@ -1,23 +1,52 @@
 {
-  "name": "@agentnauts/server",
+  "name": "agentnauts",
   "version": "0.1.0",
-  "private": true,
-  "description": "Event bridge: receives Claude Code hook payloads over HTTP and broadcasts normalized AgentEvents over WebSocket.",
+  "description": "Watch your Claude Code agents as astronauts on a tiny planet.",
+  "keywords": [
+    "claude-code",
+    "claude",
+    "agents",
+    "hooks",
+    "visualizer"
+  ],
+  "homepage": "https://github.com/macholul/agentnauts#readme",
+  "bugs": {
+    "url": "https://github.com/macholul/agentnauts/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/macholul/agentnauts.git",
+    "directory": "server"
+  },
+  "license": "MIT",
+  "author": "macholul",
   "type": "module",
+  "bin": {
+    "agentnauts": "dist/cli.js"
+  },
+  "files": [
+    "dist/cli.js"
+  ],
+  "engines": {
+    "node": ">=20.19"
+  },
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "start": "node dist/index.js",
+    "dev": "tsx watch src/cli.ts start --no-hooks --no-open --verbose",
+    "start": "node dist/cli.js start --no-hooks --no-open",
+    "cli": "tsx src/cli.ts",
     "typecheck": "tsc -p .",
-    "build": "npm run typecheck && esbuild src/index.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/index.js --external:ws --external:@supabase/supabase-js",
+    "build": "npm run typecheck && node build.mjs",
     "test": "tsx --test src/*.test.ts",
-    "check:cloud": "tsx src/checkCloud.ts"
+    "smoke": "node scripts/smoke.mjs",
+    "check:cloud": "tsx src/checkCloud.ts",
+    "prepack": "npm run build && node -e \"fs.copyFileSync('../LICENSE', 'LICENSE')\"",
+    "postpack": "node -e \"fs.rmSync('LICENSE', { force: true })\""
   },
   "dependencies": {
-    "@agentnauts/shared": "0.1.0",
-    "@supabase/supabase-js": "^2.117.2",
     "ws": "^8.22.0"
   },
   "devDependencies": {
+    "@agentnauts/shared": "0.1.0",
     "@electric-sql/pglite": "^0.5.8",
     "@types/node": "^26.6.3",
     "@types/ws": "^8.18.1",

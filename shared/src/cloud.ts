@@ -9,7 +9,13 @@
  * for the web app), e.g. to point a fork at its own project.
  */
 export const CLOUD = {
-  /** Where the web app lives; the daemon prints links to it. Override with AGENTNAUTS_APP_URL. */
+  /**
+   * Where the hosted web app lives; the published tool opens and prints links
+   * to it. (Run from source, the daemon links to the local dev server
+   * instead.) Override with AGENTNAUTS_APP_URL.
+   *
+   * Not hosted yet, so this is still the local address.
+   */
   appUrl: 'http://localhost:5173',
   supabaseUrl: 'https://ukcwdorzglnawnjfeazz.supabase.co',
   supabaseAnonKey:

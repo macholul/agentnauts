@@ -6,7 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
+            "command": "curl -s --connect-timeout 0.5 -m 2 -X POST -H 'Content-Type: application/json' -d @- http://127.0.0.1:4747/event || true # agentnauts",
+            "timeout": 5
           }
         ]
       }
@@ -17,7 +18,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
+            "command": "curl -s --connect-timeout 0.5 -m 2 -X POST -H 'Content-Type: application/json' -d @- http://127.0.0.1:4747/event || true # agentnauts",
+            "timeout": 5
           }
         ]
       }
@@ -28,7 +30,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
+            "command": "curl -s --connect-timeout 0.5 -m 2 -X POST -H 'Content-Type: application/json' -d @- http://127.0.0.1:4747/event || true # agentnauts",
+            "timeout": 5
           }
         ]
       }
@@ -38,7 +41,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
+            "command": "curl -s --connect-timeout 0.5 -m 2 -X POST -H 'Content-Type: application/json' -d @- http://127.0.0.1:4747/event || true # agentnauts",
+            "timeout": 5
           }
         ]
       }
@@ -48,7 +52,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
+            "command": "curl -s --connect-timeout 0.5 -m 2 -X POST -H 'Content-Type: application/json' -d @- http://127.0.0.1:4747/event || true # agentnauts",
+            "timeout": 5
           }
         ]
       }
@@ -58,7 +63,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
+            "command": "curl -s --connect-timeout 0.5 -m 2 -X POST -H 'Content-Type: application/json' -d @- http://127.0.0.1:4747/event || true # agentnauts",
+            "timeout": 5
           }
         ]
       }
@@ -68,7 +74,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
+            "command": "curl -s --connect-timeout 0.5 -m 2 -X POST -H 'Content-Type: application/json' -d @- http://127.0.0.1:4747/event || true # agentnauts",
+            "timeout": 5
           }
         ]
       }
@@ -78,7 +85,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
+            "command": "curl -s --connect-timeout 0.5 -m 2 -X POST -H 'Content-Type: application/json' -d @- http://127.0.0.1:4747/event || true # agentnauts",
+            "timeout": 5
           }
         ]
       }
@@ -88,7 +96,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
+            "command": "curl -s --connect-timeout 0.5 -m 2 -X POST -H 'Content-Type: application/json' -d @- http://127.0.0.1:4747/event || true # agentnauts",
+            "timeout": 5
           }
         ]
       }
@@ -98,7 +107,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -X POST -H 'Content-Type: application/json' -d @- http://localhost:4747/event || true"
+            "command": "curl -s --connect-timeout 0.5 -m 2 -X POST -H 'Content-Type: application/json' -d @- http://127.0.0.1:4747/event || true # agentnauts",
+            "timeout": 5
           }
         ]
       }

@@ -30,3 +30,6 @@ Thumbs.db
 .vite/
 .cache/
 coverage/
+
+# copied in from the repository root when packing
+server/LICENSE
