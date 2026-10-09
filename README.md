@@ -32,7 +32,7 @@ on :4173); the choice is remembered.
 
 To see your real Claude Code sessions:
 
-1. **Sign in** in the HUD (a link is emailed to you, no password).
+1. **Sign in** on the page: with GitHub, or with a link emailed to you (no password).
 2. **Connect this computer**: `npm run agentnauts -- connect` opens the app
    with this computer's link. Check that the page shows the same ID as the
    terminal, and click **Connect**.
@@ -228,7 +228,7 @@ your Claude Code ──hooks──▶ your daemon ──signed events──▶ y
 
 **Using it** (HUD, top left):
 
-1. **Sign in** with your email: click the link Supabase emails you (no password).
+1. **Sign in** with GitHub, or with your email: click the link Supabase emails you (no password).
 2. **Connect a computer**: run `agentnauts` (or `agentnauts connect`) on it;
    the app opens with that computer's link. Compare the ID with the terminal
    and click **Connect**. It shows up under **Your computers**; **disconnect**
@@ -267,7 +267,12 @@ setup for the maintainer only:**
    as an Edge Function named `agent-auth`, and add the secret
    `AGENT_JWT_SECRET` (Edge Functions → Secrets) with the project's legacy
    JWT secret (Project Settings → JWT Keys).
-4. Authentication → Sign In / Providers: keep **Email** enabled. In
+4. Authentication → Sign In / Providers: keep **Email** enabled, and for
+   **GitHub** create an OAuth app on GitHub (Settings → Developer settings →
+   OAuth Apps) whose callback URL is
+   `https://<project>.supabase.co/auth/v1/callback`, then paste its client ID
+   and secret into the GitHub provider. The "Continue with GitHub" button
+   shows up by itself once the provider is on. In
    Authentication → URL Configuration, set the Site URL to where people open
    the app (e.g. `http://localhost:5173`) and add it under Redirect URLs, so
    the sign-in link in the email brings people back to it. The built-in email

@@ -1,10 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { STATION_IDS } from '@agentnauts/shared';
 import { useAgentStore, type Agent } from '../store/agentStore';
 import { useSourceStore, type SourceInfo } from '../sources/sourceStore';
 import { STATIONS } from '../world/config';
+import { useCoveredSpace } from './coveredSpace';
 import { Multiplayer } from './Multiplayer';
 import './hud.css';
+
+/** At this width and below, the open panel is a sheet along the bottom (as in hud.css). */
+const PHONE_WIDTH = 640;
 
 const STATE_LABEL: Record<Agent['state'], string> = {
   idle: 'idle',
@@ -93,15 +97,18 @@ export function Hud() {
   const sources = useSourceStore((s) => s.sources);
   const simulatorEnabled = useSourceStore((s) => s.simulatorEnabled);
   const setSimulatorEnabled = useSourceStore((s) => s.setSimulatorEnabled);
-  const [collapsed, setCollapsed] = useState(false);
+  // On phones the panel starts folded, so the planet is what you see first.
+  const [collapsed, setCollapsed] = useState(() => window.matchMedia(`(max-width: ${PHONE_WIDTH}px)`).matches);
   const [legendOpen, setLegendOpen] = useState(false);
+  const panel = useRef<HTMLElement>(null);
+  useCoveredSpace('hud', panel, { dock: 'none', sheetWidth: PHONE_WIDTH, active: !collapsed });
 
   const ordered = useMemo(() => orderAgents(agents), [agents]);
   const connections = Object.values(sources).filter((s) => s.id !== 'simulator' && s.id !== 'room');
   const waiting = ordered.filter((a) => a.state === 'waiting').length;
 
   return (
-    <aside className={`hud ${collapsed ? 'hud--collapsed' : ''}`}>
+    <aside ref={panel} className={`hud ${collapsed ? 'hud--collapsed' : ''}`}>
       <header className="hud-header">
         <button className="hud-title" onClick={() => setCollapsed((c) => !c)} aria-expanded={!collapsed}>
           <span className="hud-logo" aria-hidden />

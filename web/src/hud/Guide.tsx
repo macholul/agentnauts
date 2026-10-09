@@ -4,13 +4,13 @@
  * the first steps: confirm a computer that asked to connect, connect one,
  * wait for the first Claude Code session.
  */
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { useViewInsets } from '../scene/viewInsets';
+import { useRef, useState, type ReactNode } from 'react';
 import { uniqueComputers } from '../sources/sharing';
 import { useSourceStore } from '../sources/sourceStore';
 import { useAuthStore } from '../sources/supabase';
 import { useIsVisitor } from '../sources/useEventSources';
 import { useAgentStore } from '../store/agentStore';
+import { useCoveredSpace } from './coveredSpace';
 import { IdChip, Pairing, SignInForm } from './Multiplayer';
 import './guide.css';
 
@@ -18,8 +18,8 @@ const COMMAND = 'npx agentnauts';
 const REPO_URL = 'https://github.com/macholul/agentnauts';
 /** "Just watching": don't ask again to connect a computer. */
 const NO_COMPUTER_KEY = 'agentnauts.justWatching';
-/** Narrower than this, cards are sheets along the bottom (same width as in guide.css). */
-const SHEET_QUERY = '(max-width: 900px)';
+/** At this width and below, cards are sheets along the bottom (as in guide.css). */
+const SHEET_WIDTH = 900;
 
 function readFlag(key: string): boolean {
   try {
@@ -45,27 +45,7 @@ function writeFlag(key: string): void {
  */
 function Card({ dock, className, label, children }: { dock: 'left' | 'middle'; className: string; label: string; children: ReactNode }) {
   const card = useRef<HTMLElement>(null);
-  useLayoutEffect(() => {
-    const element = card.current;
-    if (!element) return;
-    const sheet = window.matchMedia(SHEET_QUERY);
-    const update = () => {
-      const rect = element.getBoundingClientRect();
-      if (sheet.matches) useViewInsets.setState({ left: 0, bottom: Math.max(0, window.innerHeight - rect.top) });
-      else useViewInsets.setState({ left: dock === 'left' ? rect.right + 16 : 0, bottom: 0 });
-    };
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(element);
-    window.addEventListener('resize', update);
-    sheet.addEventListener('change', update);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', update);
-      sheet.removeEventListener('change', update);
-      useViewInsets.setState({ left: 0, bottom: 0 });
-    };
-  }, [dock]);
+  useCoveredSpace('guide', card, { dock: dock === 'left' ? 'left' : 'none', sheetWidth: SHEET_WIDTH });
   return (
     <section ref={card} className={`guide ${className}`} aria-label={label}>
       {children}

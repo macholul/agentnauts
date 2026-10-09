@@ -198,6 +198,15 @@ See `docs/ROADMAP.md` for the plan. What changed from the notes below:
   to fit and shifts the picture with `camera.setViewOffset` (a lens shift,
   so orbiting still turns around the base). Up to 900px wide the cards are
   sheets along the bottom and the world sits above them.
+- Several overlays can cover the screen at once (`setCover(id, …)` in
+  `scene/viewInsets.ts`, measured by `hud/coveredSpace.ts`); the camera keeps
+  clear of all of them. On phones (640px and narrower) the panel starts
+  folded into a button and opens as a sheet along the bottom.
+- GitHub sign-in (`signInWithGitHub` in `sources/supabase.ts`): the button
+  appears only when the project's public auth settings say GitHub is on,
+  so nothing breaks before the provider is set up. An error from the round
+  trip (`#error_description=…`) is shown on the sign-in form. The GitHub
+  username becomes the default name in rooms.
 
 ## Status: verified live (2026-10-01)
 

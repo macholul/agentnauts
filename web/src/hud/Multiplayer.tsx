@@ -14,7 +14,7 @@ import {
 } from '../sources/roomsApi';
 import { isStarting, refreshAgents, shareInRoom, stopSharingInRoom, timeOf, uniqueComputers } from '../sources/sharing';
 import { useSourceStore } from '../sources/sourceStore';
-import { sendSignInCode, signOut, useAuthStore, verifySignInCode } from '../sources/supabase';
+import { sendSignInCode, signInWithGitHub, signOut, useAuthStore, verifySignInCode } from '../sources/supabase';
 
 function shareLink(code: string): string {
   const url = new URL(window.location.href);
@@ -64,6 +64,8 @@ export function useAction() {
  * this browser in and every open agentnauts tab updates by itself.
  */
 export function SignInForm() {
+  const github = useAuthStore((s) => s.github);
+  const returnedError = useAuthStore((s) => s.signInError);
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [sent, setSent] = useState(false);
@@ -78,6 +80,15 @@ export function SignInForm() {
 
   return (
     <>
+      {github && (
+        <>
+          <button type="button" className="hud-button hud-button--github" disabled={busy} onClick={() => void run(signInWithGitHub)}>
+            Continue with GitHub
+          </button>
+          <div className="hud-or">or get a link by email</div>
+        </>
+      )}
+      {returnedError && !error && <div className="hud-note">Sign-in didn't work: {returnedError}</div>}
       <form className="hud-form" onSubmit={submit}>
         <input
           className="hud-input"

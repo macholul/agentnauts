@@ -73,8 +73,8 @@ export function useEventSources(): void {
       store.forgetAgents();
       return;
     }
-    const email = useAuthStore.getState().user?.email ?? '';
-    if (!store.name) store.setName(cleanName(email.split('@')[0] ?? '') || 'me');
+    const account = useAuthStore.getState().user;
+    if (!store.name) store.setName(cleanName(account?.name ?? '') || cleanName(account?.email.split('@')[0] ?? '') || 'me');
     let cancelled = false;
     let loading = false;
     const load = async () => {

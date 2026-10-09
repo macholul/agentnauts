@@ -96,9 +96,11 @@ signed-out demo).
   Supabase's Site URL and Redirect URLs have the address. The landing page
   (demo crew, the one command, sign-in) and the first steps after signing
   in were added on 2026-10-06, and `npx agentnauts` works since 2026-10-09.
-  Still to do: the panel on small screens, sign-in for people outside the
-  team (GitHub, or a mail service), a separate production Supabase project,
-  and the own domain.
+  The panel works on phones, and GitHub sign-in is built: its button shows
+  once the provider is switched on in Supabase (needs a GitHub OAuth app).
+  Still to do: switching that on, a mail service if email links should
+  reach people outside the team, a separate production Supabase project,
+  the own domain, and the test with a second person.
 
 ## Phases
 
