@@ -11,7 +11,15 @@ import { readPairing, useSourceStore } from './sourceStore';
 import { getSupabase, useAuthStore } from './supabase';
 
 /** Local mode: also read events straight from a daemon on this machine. */
-const LOCAL_BRIDGE = import.meta.env.VITE_LOCAL_BRIDGE === '1';
+export const LOCAL_BRIDGE = import.meta.env.VITE_LOCAL_BRIDGE === '1';
+
+/**
+ * Someone who isn't signed in, on a build with accounts (not local mode).
+ * They get the landing page, with the simulator's crew as a demo.
+ */
+export function useIsVisitor(): boolean {
+  return useAuthStore((s) => s.available && !s.loading && !s.user) && !LOCAL_BRIDGE;
+}
 
 const hasAgent = (sessionId: string, subagentId?: string) =>
   Boolean(useAgentStore.getState().agents[subagentId ? crewId(sessionId, subagentId) : sessionId]);
@@ -19,6 +27,7 @@ const hasAgent = (sessionId: string, subagentId?: string) =>
 /** Starts and stops event sources for the app's lifetime. */
 export function useEventSources(): void {
   const simulatorEnabled = useSourceStore((s) => s.simulatorEnabled);
+  const visitor = useIsVisitor();
   const room = useSourceStore((s) => s.room);
   const personalRoom = useSourceStore((s) => s.personalRoom);
   const name = useSourceStore((s) => s.name);
@@ -43,14 +52,16 @@ export function useEventSources(): void {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
-  // Fake agents, toggled from the HUD. Turning it off sends them home.
+  // Fake agents: toggled from the HUD, and always on for visitors as a demo.
+  // Turning it off (or signing in) sends them home.
+  const simulating = simulatorEnabled || visitor;
   useEffect(() => {
-    if (!simulatorEnabled) {
+    if (!simulating) {
       useSourceStore.getState().upsertSource({ id: 'simulator', label: 'Simulator', state: 'stopped' });
       return;
     }
     return attachSource(new SimulatorSource(), { clearOnDetach: true });
-  }, [simulatorEnabled]);
+  }, [simulating]);
 
   // Signed in: find (or create) your personal room, and keep the list of
   // your computers fresh. Keyed on the user id: the auth client reports the
@@ -59,7 +70,7 @@ export function useEventSources(): void {
     const store = useSourceStore.getState();
     if (!userId) {
       store.setPersonalRoom(null);
-      store.setAgents([]);
+      store.forgetAgents();
       return;
     }
     const email = useAuthStore.getState().user?.email ?? '';

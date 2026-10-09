@@ -24,9 +24,11 @@ npm install
 npm run dev          # daemon on :4747 + web app on :5173
 ```
 
-Open <http://localhost:5173>. In dev the **simulator** is on, so two fake
-agents start working right away. Toggle it in the HUD (top left); the choice is
-remembered. Production builds (`npm start`, served on :4173) start with it off.
+Open <http://localhost:5173>. Signed out, the page is the landing page: the
+**simulator**'s two fake agents work as a demo next to a card with the one
+command and sign-in. Signed in, the simulator is a toggle in the HUD (top
+left), on by default in dev and off in production builds (`npm start`, served
+on :4173); the choice is remembered.
 
 To see your real Claude Code sessions:
 
@@ -73,9 +75,9 @@ npx agentnauts
 browser, `--verbose` prints every event. In this repo `npm run dev` passes
 all three, so developing never changes your own Claude Code settings.
 
-The package is not released yet: the published `agentnauts` on npm is still
-a placeholder (see [`docs/ROADMAP.md`](docs/ROADMAP.md)). `npm pack -w server`
-builds the real one, which opens the hosted app.
+Version 0.1.0 is on npm. To release a new one, raise `version` in
+`server/package.json` and run `npm publish -w server` (it builds first and
+asks for the npm account's 2FA code).
 
 ## Connecting Claude Code
 

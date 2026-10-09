@@ -145,7 +145,11 @@ interface SourceStoreState {
   setPersonalRoom: (room: JoinedRoom | null) => void;
   /** Your computers and the rooms each publishes to (from the database). */
   agents: MyAgent[];
+  /** The list above has been loaded since signing in (empty can mean "none yet"). */
+  agentsLoaded: boolean;
   setAgents: (agents: MyAgent[]) => void;
+  /** Signed out: nothing is known about your computers. */
+  forgetAgents: () => void;
   /** A computer asking to be connected, from the link its daemon printed. */
   pairing: PairingRequest | null;
   setPairing: (pairing: PairingRequest | null) => void;
@@ -184,10 +188,12 @@ export const useSourceStore = create<SourceStoreState>()((set) => ({
   bridgeIdentity: null,
   personalRoom: null,
   agents: [],
+  agentsLoaded: false,
   pairing: readPairing(),
 
   setPersonalRoom: (personalRoom) => set({ personalRoom }),
-  setAgents: (agents) => set({ agents }),
+  setAgents: (agents) => set({ agents, agentsLoaded: true }),
+  forgetAgents: () => set({ agents: [], agentsLoaded: false }),
   setPairing: (pairing) => {
     if (!pairing) writeStorage(PAIRING_KEY, null);
     set({ pairing });

@@ -156,7 +156,9 @@ See `docs/ROADMAP.md` for the plan. What changed from the notes below:
 - When trying commands by hand, set `HOME` to a scratch folder: `hooks
   install`, `disconnect` and `uninstall` act on the real settings file and
   the real key otherwise.
-- Not done: releasing to npm, and a person trying it on Windows. On Windows
+- Released as `agentnauts@0.1.0` on 2026-10-09 (the maintainer runs
+  `npm publish -w server`; it needs their 2FA).
+- Not done: a person trying it on Windows. On Windows
   CI the hook command works through Git Bash; with the daemon stopped it
   costs about half a second per hook there (its connect time limit), against
   a few milliseconds on macOS and Linux.
@@ -174,6 +176,28 @@ See `docs/ROADMAP.md` for the plan. What changed from the notes below:
 - Not done for hosting: Supabase's Site URL and Redirect URLs still need
   the hosted address (dashboard only, Authentication → URL Configuration).
   Until then a sign-in started on the hosted app comes back to localhost.
+
+## Phase 3: landing page (2026-10-06)
+
+- `web/src/hud/Guide.tsx` is the card in front of the world. Signed out
+  (`useIsVisitor()` in `sources/useEventSources.ts`: a build with accounts,
+  not local mode) it is the landing page: what this is, `npx agentnauts`
+  with a copy button, the email sign-in form (`SignInForm`, shared with the
+  panel) and links. It has variants for a pairing link (`#connect=`) and an
+  invite link (`?room=`). The panel (HUD) is hidden for visitors.
+- Visitors always get the simulator's crew as a demo, whatever the
+  simulator toggle says; signing in sends the demo crew home unless the
+  toggle is on.
+- Signed in, the card shows the next step: confirm a computer that opened
+  a pairing link (the `Pairing` section moved here from the panel), run
+  `npx agentnauts` if no computer is connected ("I'm just watching" hides
+  that for good), and a "Waiting for Claude Code on …" pill while the world
+  is empty.
+- The camera frames the world in the part of the screen the card leaves
+  free: `scene/viewInsets.ts` holds the covered space, `CameraRig` backs off
+  to fit and shifts the picture with `camera.setViewOffset` (a lens shift,
+  so orbiting still turns around the base). Up to 900px wide the cards are
+  sheets along the bottom and the world sits above them.
 
 ## Status: verified live (2026-10-01)
 
@@ -219,7 +243,14 @@ curl to give that side an agent.
 ## Testing tips
 
 - Dev-only store handle: `window.__agentnauts.store` (inject events with
-  `applyEvent`, or set agent state directly for screenshots).
+  `applyEvent`, or set agent state directly for screenshots), plus
+  `.sources` and `.auth` to put the page in other states, e.g.
+  `auth.setState({ user: { id, email }, loading: false })` for signed in.
+- The in-app browser pane stops drawing (no animation frames) while the
+  session isn't open on screen: the 3D canvas stays at 300x150 and never
+  starts. Open `/render-check.html` on the dev server instead: the same app
+  with animation frames and resize notifications faked, so screenshots
+  work.
 - Headless Chromium (Playwright) works with
   `--use-angle=swiftshader --enable-unsafe-swiftshader`, but is slow; place
   agents directly rather than waiting for them to walk.

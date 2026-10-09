@@ -22,7 +22,7 @@ export function Scene() {
       gl={{ antialias: true, toneMapping: NeutralToneMapping, toneMappingExposure: 1.0 }}
     >
       <color attach="background" args={[PALETTE.haze]} />
-      <fog attach="fog" args={[PALETTE.haze, 60, 150]} />
+      {/* The haze (fog) is set by CameraRig: it moves back with the camera. */}
       <CameraRig />
       <Lighting />
       <PlanetSurface />

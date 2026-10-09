@@ -24,7 +24,7 @@
   padding-bottom: 10px;
 }
 
-.hud button {
+:is(.hud, .guide) button {
   font: inherit;
   color: inherit;
   background: none;
@@ -342,7 +342,7 @@
   border-color: #7c6cf0;
 }
 
-.hud .hud-button {
+:is(.hud, .guide) .hud-button {
   font-weight: 800;
   font-size: 12px;
   padding: 5px 10px;
@@ -351,17 +351,17 @@
   color: white;
 }
 
-.hud .hud-button:disabled {
+:is(.hud, .guide) .hud-button:disabled {
   opacity: 0.45;
   cursor: default;
 }
 
-.hud .hud-button--ghost {
+:is(.hud, .guide) .hud-button--ghost {
   background: rgba(124, 108, 240, 0.12);
   color: #5b4bd6;
 }
 
-.hud .hud-action {
+:is(.hud, .guide) .hud-action {
   color: #5b4bd6;
   font-weight: 700;
 }
@@ -441,7 +441,7 @@
   color: var(--ink);
 }
 
-.hud .hud-note .hud-action {
+:is(.hud, .guide) .hud-note .hud-action {
   font-size: inherit;
 }
 

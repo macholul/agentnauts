@@ -23,7 +23,7 @@ function shareLink(code: string): string {
 }
 
 /** Short, readable ID chip for a public key. */
-function IdChip({ publicKey, title }: { publicKey: string; title?: string }) {
+export function IdChip({ publicKey, title }: { publicKey: string; title?: string }) {
   return (
     <span className="hud-id" title={title ?? 'Verified ID: only this computer can send events with it'}>
       ✓ {keyFingerprint(publicKey)}
@@ -41,7 +41,7 @@ function Section({ title = 'Room', children }: { title?: string; children: React
 }
 
 /** Run an async action with a busy flag and a friendly error message. */
-function useAction() {
+export function useAction() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const run = async (action: () => Promise<void>) => {
@@ -63,8 +63,7 @@ function useAction() {
  * too, if the Supabase email template includes one); clicking the link signs
  * this browser in and every open agentnauts tab updates by itself.
  */
-function SignIn() {
-  const pairing = useSourceStore((s) => s.pairing);
+export function SignInForm() {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [sent, setSent] = useState(false);
@@ -78,18 +77,13 @@ function SignIn() {
   };
 
   return (
-    <Section title="Account">
-      {pairing ? (
-        <div className="hud-note hud-note--ask">
-          Sign in to connect this computer <IdChip publicKey={pairing.key} title="Check that the terminal shows the same ID" />
-        </div>
-      ) : (
-        <div className="hud-small hud-muted">Sign in to see your agents here and join private rooms.</div>
-      )}
+    <>
       <form className="hud-form" onSubmit={submit}>
         <input
           className="hud-input"
           type="email"
+          aria-label="Email"
+          autoComplete="email"
           placeholder="you@example.com"
           value={email}
           disabled={sent}
@@ -142,6 +136,23 @@ function SignIn() {
         )}
       </form>
       {error && <div className="hud-note">{error}</div>}
+    </>
+  );
+}
+
+/** The panel's account section when signed out (local mode; elsewhere the landing page has the form). */
+function SignIn() {
+  const pairing = useSourceStore((s) => s.pairing);
+  return (
+    <Section title="Account">
+      {pairing ? (
+        <div className="hud-note hud-note--ask">
+          Sign in to connect this computer <IdChip publicKey={pairing.key} title="Check that the terminal shows the same ID" />
+        </div>
+      ) : (
+        <div className="hud-small hud-muted">Sign in to see your agents here and join private rooms.</div>
+      )}
+      <SignInForm />
     </Section>
   );
 }
@@ -159,9 +170,9 @@ function lastSeen(agents: MyAgent[], publicKey: string): string {
 /**
  * A computer asking to be connected (you opened the link its daemon printed).
  * Connecting registers its public key for your personal room; the computer
- * never gets your sign-in.
+ * never gets your sign-in. Shown in the guide card (Guide.tsx).
  */
-function Pairing({ pairing }: { pairing: PairingRequest }) {
+export function Pairing({ pairing }: { pairing: PairingRequest }) {
   const personal = useSourceStore((s) => s.personalRoom);
   const already = useSourceStore((s) => s.agents.some((a) => a.personal && a.publicKey === pairing.key));
   const [device, setDevice] = useState(pairing.device || 'My computer');
@@ -221,7 +232,7 @@ function Computers() {
   return (
     <Section title="Your computers">
       {computers.length === 0 ? (
-        <div className="hud-empty">None connected yet. Start the agentnauts daemon on your computer and open the link it prints.</div>
+        <div className="hud-empty">None connected yet. Run npx agentnauts on the computer where you use Claude Code.</div>
       ) : (
         <ul className="hud-people">
           {computers.map((computer) => (
@@ -574,12 +585,11 @@ function RoomPanel({ userId, email }: { userId: string; email: string }) {
   return <InRoom userId={userId} />;
 }
 
-/** HUD sections for a signed-in person: connect computers, share a room. */
+/** HUD sections for a signed-in person: your computers, a shared room. */
 export function Multiplayer() {
   const available = useAuthStore((s) => s.available);
   const loading = useAuthStore((s) => s.loading);
   const user = useAuthStore((s) => s.user);
-  const pairing = useSourceStore((s) => s.pairing);
 
   if (!available) {
     return (
@@ -592,7 +602,6 @@ export function Multiplayer() {
   if (!user) return <SignIn />;
   return (
     <>
-      {pairing && <Pairing pairing={pairing} />}
       <Computers />
       <RoomPanel userId={user.id} email={user.email} />
     </>

@@ -87,18 +87,18 @@ signed-out demo).
 - Phase 2: built (2026-10-02). `server/` is the package `agentnauts`; the
   packed tarball was installed into an empty project and run with a throwaway
   home folder on macOS (`npm run smoke -w server`), and CI repeats that on
-  Linux and Windows. Not released: `npx agentnauts` still gets the 0.0.1
-  placeholder, because the real one would send people to `localhost:5173`
-  until Phase 3 gives the app an address. Still to do by hand: a person
-  going through it with a real Claude Code session on Windows.
+  Linux and Windows. Released as 0.1.0 on npm on 2026-10-09, once the app
+  had an address. Still to do by hand: a person going through it with a
+  real Claude Code session on Windows.
 - Phase 3: started (2026-10-02). The web app is live at
   <https://agentnauts.vercel.app>: a Vercel project linked to the repository
   that redeploys on every push to `main`, and `CLOUD.appUrl` points at it.
-  Still to do: the address in Supabase's Site URL and Redirect URLs (until
-  then, signing in on the hosted app sends people back to localhost), the
-  signed-out landing page and first-run state, small screens, sign-in for
-  people outside the team (mail service or GitHub), a separate production
-  Supabase project, the own domain, and releasing the npm package.
+  Supabase's Site URL and Redirect URLs have the address. The landing page
+  (demo crew, the one command, sign-in) and the first steps after signing
+  in were added on 2026-10-06, and `npx agentnauts` works since 2026-10-09.
+  Still to do: the panel on small screens, sign-in for people outside the
+  team (GitHub, or a mail service), a separate production Supabase project,
+  and the own domain.
 
 ## Phases
 
@@ -243,8 +243,8 @@ is a selling point at launch.
   whether its rooms changed (about 20,000 calls a month for someone working
   full days). Fine for a beta; before launch, replace it with a cheaper
   "did anything change" check.
-- **Domain not bought yet**: the npm name (a 0.0.1 placeholder) and the
-  GitHub repo are ours; the domain is only free until someone registers it.
+- **Domain not bought yet**: the npm name and the GitHub repo are ours; the
+  domain is only free until someone registers it.
 - **Old tool, new site**: handled by the protocol version from Phase 1.
 
 ## Verification
